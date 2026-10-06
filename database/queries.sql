@@ -142,3 +142,47 @@ SELECT
     ON a.currency_id = cur.id
   WHERE cur.code = 'USD';
 
+INSERT INTO transactions
+  (name, amount, type, date, notes, category_id, account_id)
+VALUES (
+  'Starbucks',
+  6.75,
+  'expense',
+  '2026-10-07',
+  'Coffee with friend',
+
+  (SELECT id FROM categories WHERE name = 'Food'),
+
+  (SELECT id FROM accounts WHERE name = 'BofA Debit Card')
+);
+
+UPDATE transactions SET amount=8.25 WHERE id=13;
+UPDATE transactions SET (name, amount, notes)=('Blue Wall', 9.50, 'Lunch') WHERE id=13;
+UPDATE accounts
+  SET balance = balance - (
+      SELECT amount
+      FROM transactions
+      WHERE id = 13
+  )
+  WHERE id = (
+      SELECT account_id
+      FROM transactions
+      WHERE id = 13
+  );
+
+UPDATE accounts
+  SET balance = balance + (
+    SELECT amount
+    FROM transactions
+    WHERE id = 13
+  )
+  WHERE id = (
+    SELECT account_id
+    FROM transactions
+    WHERE id = 13
+  );
+DELETE FROM transactions WHERE id = 13;
+
+UPDATE categories
+  SET is_active=0
+  WHERE name='Tourism';
