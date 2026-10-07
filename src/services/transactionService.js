@@ -5,7 +5,43 @@ function balanceEffect(type, amount) {
   return type === "income" ? amount : -amount;
 }
 
-function validateTransaction({name, amount, type, date, categoryId, accountId,}) {
+async function validateReferences(categoryId, accountId) {
+  const category = await get(
+    `
+      SELECT id
+      FROM categories
+      WHERE id = ?
+        AND is_active = 1
+    `,
+    [categoryId]
+  );
+
+  if (!category) {
+    throw new AppError(
+      "Category not found or inactive",
+      400
+    );
+  }
+
+  const account = await get(
+    `
+      SELECT id
+      FROM accounts
+      WHERE id = ?
+        AND is_active = 1
+    `,
+    [accountId]
+  );
+
+  if (!account) {
+    throw new AppError(
+      "Account not found or inactive",
+      400
+    );
+  }
+}
+
+function validateTransaction({ name, amount, type, date, categoryId, accountId, }) {
   if (!name?.trim()) {
     throw new AppError("Name is required", 400);
   }
@@ -41,6 +77,8 @@ export async function createTransaction({
   accountId,
 }) {
   validateTransaction({name, amount, type, date, categoryId, accountId});
+
+  await validateReferences(categoryId, accountId);
 
   try {
     await run("BEGIN TRANSACTION");
@@ -181,6 +219,8 @@ export async function updateTransaction(
 ) {
   validateTransaction({name, amount, type, date, categoryId, accountId});
 
+  await validateReferences(categoryId, accountId);
+  
   try {
     await run("BEGIN TRANSACTION");
 

@@ -5,7 +5,7 @@ import {
   test,
 } from "@jest/globals";
 
-import { get } from "../src/database.js";
+import { get, run } from "../src/database.js";
 
 import {
   createTransaction,
@@ -81,6 +81,21 @@ describe("createTransaction", () => {
       statusCode: 400,
     });
   });
+
+  test("rejects transaction with nonexistent category", async () => {
+    await expect(
+      createTransaction({
+        name: "Coffee",
+        amount: 5,
+        type: "expense",
+        date: "2026-10-07",
+        categoryId: 999999,
+        accountId: 1,
+      })
+    ).rejects.toMatchObject({
+      statusCode: 400,
+    });
+  });
 });
 
 describe("updateTransaction", () => {
@@ -130,6 +145,26 @@ describe("updateTransaction", () => {
     expect(account2After.balance).toBe(
       account2BeforeUpdate.balance + 50
     );
+  });
+
+  test("rejects transaction using inactive account", async () => {
+    await run(
+      "UPDATE accounts SET is_active = 0 WHERE id = ?",
+      [1]
+    );
+
+    await expect(
+      createTransaction({
+        name: "Coffee",
+        amount: 5,
+        type: "expense",
+        date: "2026-10-07",
+        categoryId: 1,
+        accountId: 1,
+      })
+    ).rejects.toMatchObject({
+      statusCode: 400,
+    });
   });
 });
 

@@ -1,4 +1,5 @@
 import { all, get, run } from "../database.js";
+import AppError from "../errors/AppError.js";
 
 export async function createTransfer({
   sourceAccountId,
@@ -10,11 +11,17 @@ export async function createTransfer({
   receivedDate,
 }) {
   if (sourceAccountId === destinationAccountId) {
-    throw new Error("Source and destination accounts must be different");
+    throw new AppError(
+      "Source and destination accounts must be different",
+      400
+    );
   }
 
   if (sentAmount <= 0 || receivedAmount <= 0 || exchangeRate <= 0) {
-    throw new Error("Transfer amounts and exchange rate must be positive");
+    throw new AppError(
+      "Transfer amounts and exchange rate must be positive",
+      400
+    );
   }
 
   try {
@@ -30,8 +37,12 @@ export async function createTransfer({
       [destinationAccountId]
     );
 
-    if (!source || !destination) {
-      throw new Error("Account not found");
+    if (!source) {
+      throw new AppError("Source account not found", 400);
+    }
+
+    if (!destination) {
+      throw new AppError("Destination account not found", 400);
     }
 
     await run(

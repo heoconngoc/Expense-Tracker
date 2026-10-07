@@ -55,4 +55,14 @@ describe("Transaction API", () => {
 
     expect(response.status).toBe(404);
   });
+
+  test("returns JSON 404 for unknown route", async () => {
+    const response = await request(app)
+      .get("/does-not-exist");
+
+    expect(response.status).toBe(404);
+    expect(response.body).toEqual({
+      error: "Route not found",
+    });
+  });
 });

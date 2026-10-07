@@ -62,6 +62,22 @@ describe("createTransfer", () => {
     expect(transfer.received_amount).toBe(1300000);
     expect(transfer.status).toBe("completed");
   });
+
+  test("rejects transfer to the same account", async () => {
+    await expect(
+      createTransfer({
+        sourceAccountId: 1,
+        destinationAccountId: 1,
+        sentAmount: 50,
+        receivedAmount: 50,
+        exchangeRate: 1,
+        sentDate: "2026-10-07",
+        receivedDate: "2026-10-07",
+      })
+    ).rejects.toMatchObject({
+      statusCode: 400,
+    });
+  });
 });
 
 describe("database transactions", () => {
