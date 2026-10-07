@@ -1,32 +1,33 @@
-import { get, run } from "../database.js";
+import { get, run, all } from "../database.js";
+import AppError from "../errors/AppError.js";
 
 function balanceEffect(type, amount) {
   return type === "income" ? amount : -amount;
 }
 
-function validateTransaction({ name, amount, type, date, categoryId, accountId }) {
+function validateTransaction({name, amount, type, date, categoryId, accountId,}) {
   if (!name?.trim()) {
-    throw new Error("Name is required");
+    throw new AppError("Name is required", 400);
   }
 
   if (typeof amount !== "number" || amount <= 0) {
-    throw new Error("Amount must be greater than 0");
+    throw new AppError("Amount must be greater than 0", 400);
   }
 
   if (!["income", "expense"].includes(type)) {
-    throw new Error("Type must be income or expense");
+    throw new AppError("Type must be income or expense", 400);
   }
 
   if (!date) {
-    throw new Error("Date is required");
+    throw new AppError("Date is required", 400);
   }
 
   if (!categoryId) {
-    throw new Error("Category is required");
+    throw new AppError("Category is required", 400);
   }
 
   if (!accountId) {
-    throw new Error("Account is required");
+    throw new AppError("Account is required", 400);
   }
 }
 
@@ -39,7 +40,7 @@ export async function createTransaction({
   categoryId,
   accountId,
 }) {
-  validateTransaction(name, amount, type, date, categoryId, accountId);
+  validateTransaction({name, amount, type, date, categoryId, accountId});
 
   try {
     await run("BEGIN TRANSACTION");
@@ -74,11 +75,96 @@ export async function createTransaction({
 
     await run("COMMIT");
 
-    return result.lastID;
+    return await get(
+      "SELECT * FROM transactions WHERE id = ?",
+      [result.lastID]
+    );
   } catch (err) {
     await run("ROLLBACK");
     throw err;
   }
+}
+
+export async function getTransactionById(id) {
+  return get(
+    `
+      SELECT
+        t.id,
+        t.name,
+        t.amount,
+        t.type,
+        t.date,
+        t.notes,
+        t.category_id,
+        c.name AS category,
+        t.account_id,
+        a.name AS account,
+        cur.code AS currency
+      FROM transactions t
+      JOIN categories c ON t.category_id = c.id
+      JOIN accounts a ON t.account_id = a.id
+      JOIN currencies cur ON a.currency_id = cur.id
+      WHERE t.id = ?
+    `,
+    [id]
+  );
+}
+
+export async function getTransactions({
+  type,
+  categoryId,
+  accountId,
+  start,
+  end,
+} = {}) {
+  let sql = `
+    SELECT
+      t.id,
+      t.name,
+      t.amount,
+      t.type,
+      t.date,
+      t.notes,
+      c.name AS category,
+      a.name AS account,
+      cur.code AS currency
+    FROM transactions t
+    JOIN categories c ON t.category_id = c.id
+    JOIN accounts a ON t.account_id = a.id
+    JOIN currencies cur ON a.currency_id = cur.id
+    WHERE 1 = 1
+  `;
+
+  const params = [];
+
+  if (type) {
+    sql += " AND t.type = ?";
+    params.push(type);
+  }
+
+  if (categoryId) {
+    sql += " AND t.category_id = ?";
+    params.push(categoryId);
+  }
+
+  if (accountId) {
+    sql += " AND t.account_id = ?";
+    params.push(accountId);
+  }
+
+  if (start) {
+    sql += " AND t.date >= ?";
+    params.push(start);
+  }
+
+  if (end) {
+    sql += " AND t.date < ?";
+    params.push(end);
+  }
+
+  sql += " ORDER BY t.date DESC, t.id DESC";
+
+  return all(sql, params);
 }
 
 export async function updateTransaction(
@@ -93,7 +179,7 @@ export async function updateTransaction(
     accountId,
   }
 ) {
-  validateTransaction(name, amount, type, date, categoryId, accountId);
+  validateTransaction({name, amount, type, date, categoryId, accountId});
 
   try {
     await run("BEGIN TRANSACTION");
@@ -104,7 +190,7 @@ export async function updateTransaction(
     );
 
     if (!oldTransaction) {
-      throw new Error("Transaction not found");
+      throw new AppError("Transaction not found", 404);
     }
 
     // Undo the old transaction's balance effect.
@@ -176,7 +262,7 @@ export async function deleteTransaction(id) {
     );
 
     if (!transaction) {
-      throw new Error("Transaction not found");
+      throw new AppError("Transaction not found", 404);
     }
 
     await run(

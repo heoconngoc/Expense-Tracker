@@ -1,4 +1,4 @@
-import { get, run } from "../database.js";
+import { all, get, run } from "../database.js";
 
 export async function createTransfer({
   sourceAccountId,
@@ -84,4 +84,25 @@ export async function createTransfer({
     await run("ROLLBACK");
     throw err;
   }
+}
+
+export async function getTransfers() {
+  return all(`
+    SELECT
+      tr.id,
+      source.name AS source_account,
+      destination.name AS destination_account,
+      tr.sent_amount,
+      tr.received_amount,
+      tr.exchange_rate,
+      tr.status,
+      tr.sent_date,
+      tr.received_date
+    FROM transfers tr
+    JOIN accounts source
+      ON tr.source_account_id = source.id
+    JOIN accounts destination
+      ON tr.destination_account_id = destination.id
+    ORDER BY tr.sent_date DESC, tr.id DESC
+  `);
 }
