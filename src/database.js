@@ -1,6 +1,7 @@
 import sqlite3 from "sqlite3";
 
-const db = new sqlite3.Database("database/expense.db");
+const DB_PATH = process.env.DB_PATH || "database/expense.db";
+const db = new sqlite3.Database(DB_PATH);
 
 db.run("PRAGMA foreign_keys = ON");
 
@@ -42,6 +43,19 @@ export function all(sql, params = []) {
       }
 
       resolve(rows);
+    });
+  });
+}
+
+export function exec(sql) {
+  return new Promise((resolve, reject) => {
+    db.exec(sql, (err) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+
+      resolve();
     });
   });
 }
