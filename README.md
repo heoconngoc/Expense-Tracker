@@ -1,89 +1,251 @@
-# Personal Expense Tracker
+# Expense Tracker
 
-A backend application for tracking personal income, expenses, accounts, transfers, and spending summaries.
+A full-stack personal expense tracking application built with **Node.js, Express, and SQLite**.
 
-This project is being built as a hands-on exercise in relational database design, SQLite, backend architecture, and REST API development.
+The project focuses on relational database design, transactional consistency, REST API architecture, automated testing, and integration between a backend API and a lightweight browser frontend.
 
 ## Features
 
-- Track income and expense transactions
-- Organize transactions by category
-- Support multiple accounts
+- Create, view, update, and delete income and expense transactions
+- Track balances across multiple accounts
 - Support accounts with different currencies
+- Organize transactions by category
 - Transfer money between accounts
-- Maintain account balances atomically
-- Filter transactions by date, type, category, and account
-- Generate dashboard summaries by date range and currency
-- Archive categories, accounts, and currencies while preserving historical data
-- REST API built with Express
+- Store exchange rates used for transfers
+- View monthly income, expenses, and net totals
+- Filter dashboard summaries by month and currency
+- Archive accounts, categories, and currencies while preserving historical data
+- Maintain account balances with atomic database operations
+- Validate business rules at the service layer
+- Protect data integrity with SQLite constraints
+- Automated service and REST API tests
+
+## Preview
+
+The browser frontend provides a simple dashboard for viewing account balances, monthly summaries, and transactions.
+
+![Expense Tracker Dashboard](docs/images/dashboard.png)
 
 ## Tech Stack
+
+### Backend
 
 - Node.js
 - Express
 - SQLite
 - `sqlite3`
-- ES Modules
+
+### Frontend
+
+- HTML
+- CSS
+- Vanilla JavaScript
+- Fetch API
+
+### Testing
+
+- Jest
+- Supertest
 
 ## Architecture
 
+The application uses a layered backend architecture:
+
 ```text
-HTTP Client
-    |
-    v
-Express Routes
-    |
-    v
-Service Layer
-    |
-    v
+Browser
+   ↓
+REST API
+   ↓
+Routes
+   ↓
+Services
+   ↓
 Database Layer
-    |
-    v
+   ↓
 SQLite
 ```
 
-### Routes
+Each layer has a separate responsibility:
 
-Routes handle HTTP-specific concerns such as requests, responses, query parameters, and status codes.
+- **Frontend** displays application data and communicates with the REST API.
+- **Routes** handle HTTP requests and responses.
+- **Services** contain business rules and coordinate database operations.
+- **Database layer** provides Promise-based helpers for interacting with SQLite.
+- **SQLite** stores application data and enforces relational constraints.
 
-### Services
+SQL is kept out of the route layer so HTTP concerns remain separate from business and persistence logic.
 
-Services contain application logic, validation, SQL operations, and atomic database transactions.
+See [`docs/architecture.md`](docs/architecture.md) for more details.
 
-### Database Layer
+## Database Design
 
-`src/database.js` provides Promise-based wrappers around SQLite operations:
+The application contains six main entities:
 
-- `run()`
-- `get()`
-- `all()`
+- Currencies
+- Categories
+- Accounts
+- Transactions
+- Transfers
+- Application settings
 
-## Database Model
+### Transactions
 
-Main entities:
+Transactions represent either **income** or **expenses**.
 
-- Currency
-- Category
-- Account
-- Transaction
-- Transfer
-- App Settings
+Each transaction belongs to one account and one category. Transaction amounts are always stored as positive values, while the transaction type determines how the account balance is affected.
 
-Relationships include:
+### Transfers
+
+Transfers are modeled separately from transactions because moving money between two accounts is neither income nor an expense.
+
+A transfer records:
+
+- Source account
+- Destination account
+- Sent amount
+- Received amount
+- Exchange rate
+- Transfer status
+- Sent date
+- Received date
+
+The exchange rate is stored with the transfer so the historical rate used for that transfer is preserved.
+
+### Multiple Currencies
+
+Each account has one currency.
+
+The application does not directly add values from different currencies because totals such as:
 
 ```text
-Currency 1 ─── N Account
-Account  1 ─── N Transaction
-Category 1 ─── N Transaction
-
-Account 1 ─── N Transfer (source)
-Account 1 ─── N Transfer (destination)
-
-Currency 1 ─── App Settings (base currency)
+100 USD + 1,000,000 VND
 ```
 
-Transactions and transfers are modeled separately because transfers move money between owned accounts and should not count as income or expenses.
+are not financially meaningful without an exchange rate.
+
+Dashboard calculations therefore operate within a selected currency.
+
+See [`docs/database-design.md`](docs/database-design.md) for more details.
+
+## Data Integrity
+
+The database uses:
+
+- Primary keys
+- Foreign keys
+- `NOT NULL` constraints
+- `UNIQUE` constraints
+- `CHECK` constraints
+- Indexes
+
+The service layer also performs business validation to provide meaningful application errors.
+
+Database constraints remain the final integrity boundary.
+
+## Atomic Balance Updates
+
+Account balances are stored in the database rather than recalculated from the complete transaction history.
+
+Because of this, operations that modify both financial records and balances must be atomic.
+
+For example, creating an expense requires:
+
+```text
+BEGIN TRANSACTION
+
+INSERT expense
+UPDATE account balance
+
+COMMIT
+```
+
+If either operation fails:
+
+```text
+ROLLBACK
+```
+
+The same approach is used when updating or deleting transactions and when transferring money between accounts.
+
+This prevents situations where a transaction exists but its corresponding account balance was not updated, or vice versa.
+
+## REST API
+
+### Transactions
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| `GET` | `/transactions` | List transactions |
+| `GET` | `/transactions/:id` | Get one transaction |
+| `POST` | `/transactions` | Create a transaction |
+| `PUT` | `/transactions/:id` | Update a transaction |
+| `DELETE` | `/transactions/:id` | Delete a transaction |
+
+Transaction listing also supports filtering.
+
+### Accounts
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| `GET` | `/accounts` | List accounts and balances |
+
+### Categories
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| `GET` | `/categories` | List categories |
+
+### Transfers
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| `GET` | `/transfers` | List transfers |
+| `POST` | `/transfers` | Create a transfer |
+
+### Dashboard
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| `GET` | `/dashboard` | Get income, expense, net, and category totals |
+
+Example:
+
+```text
+GET /dashboard?start=2026-10-01&end=2026-11-01&currency=USD
+```
+
+Example response:
+
+```json
+{
+  "currency": "USD",
+  "totalIncome": 1200,
+  "totalExpense": 185.24,
+  "net": 1014.76,
+  "byCategory": [
+    {
+      "category": "Food",
+      "total": 70.25
+    }
+  ]
+}
+```
+
+## Frontend
+
+The frontend is served directly by Express and communicates with the REST API using `fetch()`.
+
+It supports:
+
+- Viewing account balances
+- Viewing transactions
+- Viewing monthly financial summaries
+- Filtering summaries by month and currency
+- Adding transactions
+- Editing transactions
+- Deleting transactions
+
+After a transaction is created, updated, or deleted, the relevant frontend data is refreshed so account balances, transaction history, and dashboard totals remain synchronized.
 
 ## Project Structure
 
@@ -92,154 +254,202 @@ expense-tracker/
 ├── database/
 │   ├── schema.sql
 │   ├── seed.sql
-│   ├── queries.sql
-│   └── expense.db
+│   └── queries.sql
 │
 ├── docs/
-│   ├── design.md
-│   ├── roadmap.md
-│   └── context.md
+│   ├── architecture.md
+│   ├── database-design.md
+│   └── images/
+│
+├── public/
+│   ├── index.html
+│   ├── styles.css
+│   └── app.js
 │
 ├── src/
-|   ├── server.js
-│   ├── database.js
 │   ├── errors/
 │   │   └── AppError.js
 │   ├── routes/
-│   │   ├── accounts.js
-│   │   ├── categories.js
-│   │   ├── dashboard.js
-│   │   ├── transactions.js
-│   │   └── transfers.js
-│   └── services/
-│       ├── accountService.js
-│       ├── categoryService.js
-│       ├── dashboardService.js
-│       ├── transactionService.js
-│       └── transferService.js
+│   ├── services/
+│   ├── app.js
+│   ├── database.js
+│   └── server.js
 │
+├── test/
+│   ├── setup.js
+│   ├── api.test.js
+│   ├── transactionService.test.js
+│   └── transferService.test.js
+│
+├── .gitignore
 ├── package.json
+├── package-lock.json
 └── README.md
 ```
 
-The SQLite database file is ignored by Git. The database can be reconstructed from `schema.sql` and `seed.sql`.
+## Getting Started
 
-## Running the Project
+### Prerequisites
 
-Install dependencies:
+Install:
+
+- Node.js
+- npm
+- SQLite
+
+Check that they are available:
+
+```bash
+node --version
+npm --version
+sqlite3 --version
+```
+
+### Clone the Repository
+
+```bash
+git clone https://github.com/heoconngoc/expense-tracker.git
+cd expense-tracker
+```
+
+### Install Dependencies
 
 ```bash
 npm install
 ```
 
-Create the database:
+### Create the Database
+
+Create the SQLite development database from the schema:
 
 ```bash
-sqlite3 database/expense.db
+sqlite3 database/expense.db < database/schema.sql
 ```
 
-Inside SQLite:
+Load the sample data:
 
-```sql
-PRAGMA foreign_keys = ON;
-.read database/schema.sql
-.read database/seed.sql
+```bash
+sqlite3 database/expense.db < database/seed.sql
 ```
 
-Start the API:
+The database files themselves are ignored by Git, so each development environment can create its own local database.
+
+### Start the Application
 
 ```bash
 npm start
 ```
 
-The server runs at:
+The application runs by default at:
 
 ```text
 http://localhost:3000
 ```
 
-## API
+Open that address in a browser to use the frontend.
 
-### Transactions
+The port can also be configured through the `PORT` environment variable.
 
-```text
-GET    /transactions
-GET    /transactions/:id
-POST   /transactions
-PUT    /transactions/:id
-DELETE /transactions/:id
+## Testing
+
+Run the automated test suite with:
+
+```bash
+npm test
 ```
 
-Filtering is supported through query parameters such as:
+Tests use a separate SQLite database:
 
 ```text
-GET /transactions?type=expense
-GET /transactions?categoryId=1
-GET /transactions?start=2026-10-01&end=2026-11-01
+database/test.db
 ```
 
-### Accounts
+The test database is reset to a known schema and seed state so tests remain isolated from the development database.
 
-```text
-GET /accounts
+The test suite covers important business behavior including:
+
+- Creating income and expense transactions
+- Account balance updates
+- Transaction updates
+- Transaction deletion
+- Transfers
+- Rollback behavior
+- Invalid transaction data
+- Invalid or inactive references
+- REST API success and error responses
+
+## Database Performance
+
+Indexes are included for common transaction access patterns:
+
+```sql
+CREATE INDEX idx_transactions_account_date
+ON transactions(account_id, date);
+
+CREATE INDEX idx_transactions_date
+ON transactions(date);
+
+CREATE INDEX idx_transactions_category_id
+ON transactions(category_id);
 ```
 
-### Categories
+The composite `(account_id, date)` index supports queries that filter transactions by account and date range.
 
-```text
-GET /categories
+SQLite `EXPLAIN QUERY PLAN` was used to verify index usage for common query patterns.
+
+## Error Handling
+
+Expected application errors use a custom `AppError` containing an HTTP status code.
+
+Examples include:
+
+- Invalid transaction amounts
+- Missing transactions
+- Invalid accounts
+- Inactive accounts
+- Invalid categories
+- Invalid transfers
+
+Unexpected errors are handled by the global Express error middleware and returned as:
+
+```json
+{
+  "error": "Internal server error"
+}
 ```
 
-### Transfers
+Internal implementation details are not exposed to the client.
 
-```text
-GET  /transfers
-POST /transfers
-```
+Unknown API routes return a JSON `404` response.
 
-### Dashboard
+## Design Goals
 
-```text
-GET /dashboard?start=2026-10-01&end=2026-11-01&currency=USD
-```
+This project was designed around several principles:
 
-The dashboard returns income, expenses, net change, and expenses grouped by category for a specific currency and date range.
+1. Keep HTTP handling separate from business logic.
+2. Keep SQL out of route handlers.
+3. Use relational constraints to protect database integrity.
+4. Use service-layer validation for business rules.
+5. Make multi-record financial operations atomic.
+6. Keep transfers separate from income and expenses.
+7. Avoid aggregating unrelated currencies.
+8. Test important business behavior automatically.
+9. Optimize common database access patterns with targeted indexes.
+10. Keep the frontend lightweight and focused on consuming the REST API.
 
-## Data Integrity
+## Future Improvements
 
-Important rules are enforced through both SQLite constraints and application logic.
+Possible future extensions include:
 
-Examples:
+- User authentication
+- Per-user accounts and transactions
+- Database migrations
+- Pending transfer completion workflow
+- Historical exchange-rate integration
+- Charts and financial visualizations
+- Pagination
+- More advanced transaction filtering
+- Deployment
+- Logging and monitoring
 
-- Transaction amounts must be positive.
-- Transaction type must be `income` or `expense`.
-- Transfer source and destination accounts must differ.
-- Completed transfers require received amount and received date.
-- Foreign keys preserve valid relationships.
-- Account balance changes and transaction creation/update/deletion occur atomically.
-- Transfers update both account balances atomically.
-
-## Development Roadmap
-
-Completed:
-
-- Phase 0 — Problem Definition
-- Phase 1 — Requirements Analysis
-- Phase 2 — Entity Discovery
-- Phase 3 — Relationship Design
-- Phase 4 — Attribute Design
-- Phase 5 — Constraints and Data Integrity
-- Phase 6 — SQLite Schema Implementation
-- Phase 7 — Seed Data
-- Phase 8 — SQL Querying
-- Phase 9 — Database CRUD
-- Phase 10 — Atomic Database Transactions
-- Phase 11 — Node.js Integration
-- Phase 12 — Business Logic
-- Phase 13 — REST API
-
-Next:
-
-- Phase 14 — Automated Testing
-- Phase 15 — SQLite Performance and Indexing
-- Phase 16 — Production Polish
+These features are intentionally outside the scope of the current version.

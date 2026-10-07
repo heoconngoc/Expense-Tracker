@@ -9,6 +9,7 @@ import dashboardRoutes from "./routes/dashboard.js";
 const app = express();
 
 app.use(express.json());
+app.use(express.static("public"));
 
 app.use("/transactions", transactionRoutes);
 app.use("/transfers", transferRoutes);

@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Expense Tracker</title>
+
+  <link rel="stylesheet" href="/styles.css">
+</head>
+
+<body>
+  <main class="container">
+    <header>
+      <div>
+        <p class="eyebrow">Personal Finance</p>
+        <h1>Expense Tracker</h1>
+      </div>
+    </header>
+
+    <dialog id="transaction-dialog">
+      <form id="transaction-form">
+        <h2>Add Transaction</h2>
+    
+        <label>
+          Name
+          <input id="transaction-name" type="text" required>
+        </label>
+    
+        <label>
+          Amount
+          <input id="transaction-amount" type="number" min="0.01" step="0.01" required>
+        </label>
+    
+        <label>
+          Type
+          <select id="transaction-type">
+            <option value="expense">Expense</option>
+            <option value="income">Income</option>
+          </select>
+        </label>
+    
+        <label>
+          Date
+          <input id="transaction-date" type="date" required>
+        </label>
+    
+        <label>
+          Category
+          <select id="transaction-category" required></select>
+        </label>
+    
+        <label>
+          Account
+          <select id="transaction-account" required></select>
+        </label>
+    
+        <label>
+          Notes
+          <textarea id="transaction-notes"></textarea>
+        </label>
+    
+        <p id="form-error"></p>
+    
+        <div class="form-actions">
+          <button type="button" id="cancel-transaction">
+            Cancel
+          </button>
+    
+          <button type="submit">
+            Save
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <section>
+      <div class="section-header">
+        <h2>Summary</h2>
+    
+        <div class="filters">
+          <label>
+            Month
+            <input id="month-filter" type="month">
+          </label>
+        
+          <label>
+            Currency
+            <select id="currency-filter">
+              <option value="USD">USD</option>
+              <option value="VND">VND</option>
+            </select>
+          </label>
+        </div>
+      </div>
+    
+      <div class="summary-grid">
+        <article class="card">
+          <p>Income</p>
+          <strong id="income">$0.00</strong>
+        </article>
+    
+        <article class="card">
+          <p>Expenses</p>
+          <strong id="expense">$0.00</strong>
+        </article>
+    
+        <article class="card">
+          <p>Net</p>
+          <strong id="net">$0.00</strong>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <h2>Accounts</h2>
+      <div id="accounts" class="account-grid"></div>
+    </section>
+
+    <section>
+      <div class="section-header">
+        <h2 id="transaction-form-title">
+          Add Transaction
+        </h2>
+        <button id="add-transaction">
+          + Add Transaction
+        </button>
+      </div>
+
+      <div id="transactions"></div>
+    </section>
+  </main>
+
+  <script type="module" src="/app.js"></script>
+</body>
+
+</html>
