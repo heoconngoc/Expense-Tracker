@@ -82,6 +82,21 @@ describe("createTransaction", () => {
     });
   });
 
+  test("rejects a non-integer amount", async () => {
+    await expect(
+      createTransaction({
+        name: "Float Expense",
+        amount: 6.75,
+        type: "expense",
+        date: "2026-10-07",
+        categoryId: 1,
+        accountId: 1,
+      })
+    ).rejects.toMatchObject({
+      statusCode: 400,
+    });
+  });
+
   test("rejects transaction with nonexistent category", async () => {
     await expect(
       createTransaction({
