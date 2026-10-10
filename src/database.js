@@ -3,7 +3,18 @@ import sqlite3 from "sqlite3";
 const DB_PATH = process.env.DB_PATH || "database/expense.db";
 const db = new sqlite3.Database(DB_PATH);
 
-db.run("PRAGMA foreign_keys = ON");
+db.exec(
+  `
+    PRAGMA foreign_keys = ON;
+    PRAGMA journal_mode = WAL;
+    PRAGMA busy_timeout = 5000;
+  `,
+  (err) => {
+    if (err) {
+      console.error("Failed to configure database:", err);
+    }
+  }
+);
 
 export function run(sql, params = []) {
   return new Promise((resolve, reject) => {
@@ -58,6 +69,20 @@ export function exec(sql) {
       resolve();
     });
   });
+}
+
+export async function withTransaction(callback) {
+  await run("BEGIN IMMEDIATE");
+
+  try {
+    const result = await callback();
+    await run("COMMIT");
+
+    return result;
+  } catch (err) {
+    await run("ROLLBACK").catch(() => {});
+    throw err;
+  }
 }
 
 export default db;
