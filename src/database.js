@@ -1,7 +1,17 @@
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import sqlite3 from "sqlite3";
 
 const DB_PATH = process.env.DB_PATH || "database/expense.db";
 const db = new sqlite3.Database(DB_PATH);
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const SCHEMA_PATH = path.join(__dirname, "../database/schema.sql");
+const REFERENCE_SEED_PATH = path.join(
+  __dirname,
+  "../database/seed-reference.sql"
+);
 
 db.exec(
   `
@@ -15,6 +25,31 @@ db.exec(
     }
   }
 );
+
+export async function initializeDatabase() {
+  const row = await get(
+    `
+      SELECT name
+      FROM sqlite_master
+      WHERE type = 'table' AND name = 'accounts'
+    `
+  );
+
+  if (row) {
+    return false;
+  }
+
+  const schema = fs.readFileSync(SCHEMA_PATH, "utf8");
+  const referenceSeed = fs.readFileSync(
+    REFERENCE_SEED_PATH,
+    "utf8"
+  );
+
+  await exec(schema);
+  await exec(referenceSeed);
+
+  return true;
+}
 
 export function run(sql, params = []) {
   return new Promise((resolve, reject) => {

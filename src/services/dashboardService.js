@@ -5,6 +5,7 @@ export async function getDashboard({
   start,
   end,
   currency,
+  accountId,
 }) {
   const currencyRow = await get(
     `
@@ -18,6 +19,24 @@ export async function getDashboard({
   if (!currencyRow) {
     throw new AppError("Currency not found", 400);
   }
+
+  if (accountId) {
+    const account = await get(
+      "SELECT id FROM accounts WHERE id = ?",
+      [accountId]
+    );
+
+    if (!account) {
+      throw new AppError("Account not found", 400);
+    }
+  }
+
+  const filters = [
+    currencyRow.id,
+    ...(accountId ? [accountId] : []),
+  ];
+
+  const accountClause = accountId ? " AND a.id = ?" : "";
 
   const totals = await get(
     `
@@ -44,9 +63,9 @@ export async function getDashboard({
 
       WHERE t.date >= ?
         AND t.date < ?
-        AND a.currency_id = ?
+        AND a.currency_id = ?${accountClause}
     `,
-    [start, end, currencyRow.id]
+    [start, end, ...filters]
   );
 
   const byCategory = await all(
@@ -64,17 +83,18 @@ export async function getDashboard({
       WHERE t.type = 'expense'
         AND t.date >= ?
         AND t.date < ?
-        AND a.currency_id = ?
+        AND a.currency_id = ?${accountClause}
 
       GROUP BY cat.id, cat.name
       ORDER BY total DESC
     `,
-    [start, end, currencyRow.id]
+    [start, end, ...filters]
   );
 
   return {
     currency,
     decimalPlaces: currencyRow.decimalPlaces,
+    accountId: accountId ?? null,
     totalIncome: totals.totalIncome,
     totalExpense: totals.totalExpense,
     net: totals.totalIncome - totals.totalExpense,

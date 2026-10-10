@@ -15,10 +15,15 @@ router.get("/", async (req, res, next) => {
       );
     }
 
+    const accountId = req.query.accountId
+      ? Number(req.query.accountId)
+      : undefined;
+
     const dashboard = await getDashboard({
       start,
       end,
       currency,
+      accountId,
     });
 
     res.json(dashboard);

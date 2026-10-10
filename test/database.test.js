@@ -5,11 +5,28 @@ import {
   test,
 } from "@jest/globals";
 
+import fs from "fs";
 import { get, run, withTransaction } from "../src/database.js";
 import { resetDatabase } from "./setup.js";
 
 beforeEach(async () => {
   await resetDatabase();
+});
+
+describe("reference seed", () => {
+  test("contains no accounts, transactions, or transfers", () => {
+    const sql = fs.readFileSync(
+      "database/seed-reference.sql",
+      "utf8"
+    );
+
+    expect(sql).toContain("INSERT INTO currencies");
+    expect(sql).toContain("INSERT INTO categories");
+
+    expect(sql).not.toContain("INSERT INTO accounts");
+    expect(sql).not.toContain("INSERT INTO transactions");
+    expect(sql).not.toContain("INSERT INTO transfers");
+  });
 });
 
 describe("withTransaction", () => {
