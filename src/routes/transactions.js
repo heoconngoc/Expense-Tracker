@@ -62,9 +62,7 @@ router.post("/", async (req, res, next) => {
 // PUT /transactions/:id
 router.put("/:id", async (req, res, next) => {
   try {
-    await updateTransaction(req.params.id, req.body);
-
-    const transaction = await getTransactionById(req.params.id);
+    const transaction = await updateTransaction(req.params.id, req.body);
 
     res.json(transaction);
   } catch (err) {

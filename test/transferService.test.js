@@ -25,7 +25,7 @@ describe("createTransfer", () => {
       [2]
     );
 
-    const transferId = await createTransfer({
+    const created = await createTransfer({
       sourceAccountId: 1,
       destinationAccountId: 2,
       sentAmount: 50,
@@ -47,7 +47,7 @@ describe("createTransfer", () => {
 
     const transfer = await get(
       "SELECT * FROM transfers WHERE id = ?",
-      [transferId]
+      [created.id]
     );
 
     expect(sourceAfter.balance).toBe(

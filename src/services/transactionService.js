@@ -1,4 +1,4 @@
-import { get, run, all } from "../database.js";
+import { get, run, all, withTransaction } from "../database.js";
 import AppError from "../errors/AppError.js";
 
 function balanceEffect(type, amount) {
@@ -46,7 +46,14 @@ function validateTransaction({ name, amount, type, date, categoryId, accountId, 
     throw new AppError("Name is required", 400);
   }
 
-  if (typeof amount !== "number" || amount <= 0) {
+  if (!Number.isInteger(amount)) {
+    throw new AppError(
+      "Amount must be an integer in the smallest unit",
+      400
+    );
+  }
+
+  if (amount <= 0) {
     throw new AppError("Amount must be greater than 0", 400);
   }
 
@@ -80,10 +87,8 @@ export async function createTransaction({
 
   await validateReferences(categoryId, accountId);
 
-  try {
-    await run("BEGIN TRANSACTION");
-
-    const result = await run(
+  const result = await withTransaction(async () => {
+    const inserted = await run(
       `
         INSERT INTO transactions
           (name, amount, type, date, notes, category_id, account_id)
@@ -111,16 +116,10 @@ export async function createTransaction({
       [balanceChange, accountId]
     );
 
-    await run("COMMIT");
+    return inserted;
+  });
 
-    return await get(
-      "SELECT * FROM transactions WHERE id = ?",
-      [result.lastID]
-    );
-  } catch (err) {
-    await run("ROLLBACK");
-    throw err;
-  }
+  return getTransactionById(result.lastID);
 }
 
 export async function getTransactionById(id) {
@@ -133,11 +132,12 @@ export async function getTransactionById(id) {
         t.type,
         t.date,
         t.notes,
-        t.category_id,
+        t.category_id AS categoryId,
         c.name AS category,
-        t.account_id,
+        t.account_id AS accountId,
         a.name AS account,
-        cur.code AS currency
+        cur.code AS currency,
+        cur.decimal_places AS decimalPlaces
       FROM transactions t
       JOIN categories c ON t.category_id = c.id
       JOIN accounts a ON t.account_id = a.id
@@ -163,9 +163,12 @@ export async function getTransactions({
       t.type,
       t.date,
       t.notes,
+      t.category_id AS categoryId,
       c.name AS category,
+      t.account_id AS accountId,
       a.name AS account,
-      cur.code AS currency
+      cur.code AS currency,
+      cur.decimal_places AS decimalPlaces
     FROM transactions t
     JOIN categories c ON t.category_id = c.id
     JOIN accounts a ON t.account_id = a.id
@@ -220,10 +223,8 @@ export async function updateTransaction(
   validateTransaction({name, amount, type, date, categoryId, accountId});
 
   await validateReferences(categoryId, accountId);
-  
-  try {
-    await run("BEGIN TRANSACTION");
 
+  await withTransaction(async () => {
     const oldTransaction = await get(
       "SELECT * FROM transactions WHERE id = ?",
       [id]
@@ -233,7 +234,6 @@ export async function updateTransaction(
       throw new AppError("Transaction not found", 404);
     }
 
-    // Undo the old transaction's balance effect.
     await run(
       `
         UPDATE accounts
@@ -246,7 +246,6 @@ export async function updateTransaction(
       ]
     );
 
-    // Update the transaction itself.
     await run(
       `
         UPDATE transactions
@@ -272,7 +271,6 @@ export async function updateTransaction(
       ]
     );
 
-    // Apply the new transaction's balance effect.
     await run(
       `
         UPDATE accounts
@@ -284,18 +282,13 @@ export async function updateTransaction(
         accountId,
       ]
     );
+  });
 
-    await run("COMMIT");
-  } catch (err) {
-    await run("ROLLBACK");
-    throw err;
-  }
+  return getTransactionById(id);
 }
 
 export async function deleteTransaction(id) {
-  try {
-    await run("BEGIN TRANSACTION");
-
+  await withTransaction(async () => {
     const transaction = await get(
       "SELECT * FROM transactions WHERE id = ?",
       [id]
@@ -321,10 +314,5 @@ export async function deleteTransaction(id) {
       "DELETE FROM transactions WHERE id = ?",
       [id]
     );
-
-    await run("COMMIT");
-  } catch (err) {
-    await run("ROLLBACK");
-    throw err;
-  }
+  });
 }
