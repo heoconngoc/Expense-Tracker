@@ -5,7 +5,9 @@ const router = express.Router();
 
 router.get("/", async (req, res, next) => {
   try {
-    const accounts = await getAccounts();
+    const accounts = await getAccounts({
+      activeOnly: req.query.active === "1",
+    });
 
     res.json(accounts);
   } catch (err) {

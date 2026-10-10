@@ -4,6 +4,7 @@ import transactionRoutes from "./routes/transactions.js";
 import transferRoutes from "./routes/transfers.js";
 import accountRoutes from "./routes/accounts.js";
 import categoryRoutes from "./routes/categories.js";
+import currencyRoutes from "./routes/currencies.js";
 import dashboardRoutes from "./routes/dashboard.js";
 
 const app = express();
@@ -15,6 +16,7 @@ app.use("/transactions", transactionRoutes);
 app.use("/transfers", transferRoutes);
 app.use("/accounts", accountRoutes);
 app.use("/categories", categoryRoutes);
+app.use("/currencies", currencyRoutes);
 app.use("/dashboard", dashboardRoutes);
 
 app.use((req, res) => {

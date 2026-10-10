@@ -1,17 +1,25 @@
 import { all } from "../database.js";
 
-export async function getAccounts() {
-  return all(`
+export async function getAccounts({ activeOnly = false } = {}) {
+  let sql = `
     SELECT
       a.id,
       a.name,
       a.balance,
-      a.is_active,
+      a.is_active AS isActive,
       c.code AS currency,
-      c.symbol
+      c.symbol,
+      c.decimal_places AS decimalPlaces
     FROM accounts a
     JOIN currencies c
       ON a.currency_id = c.id
-    ORDER BY a.name
-  `);
+  `;
+
+  if (activeOnly) {
+    sql += " WHERE a.is_active = 1";
+  }
+
+  sql += " ORDER BY a.name";
+
+  return all(sql);
 }

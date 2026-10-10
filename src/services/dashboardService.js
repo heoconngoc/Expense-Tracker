@@ -1,10 +1,24 @@
 import { all, get } from "../database.js";
+import AppError from "../errors/AppError.js";
 
 export async function getDashboard({
   start,
   end,
   currency,
 }) {
+  const currencyRow = await get(
+    `
+      SELECT id, code, decimal_places AS decimalPlaces
+      FROM currencies
+      WHERE code = ?
+    `,
+    [currency]
+  );
+
+  if (!currencyRow) {
+    throw new AppError("Currency not found", 400);
+  }
+
   const totals = await get(
     `
       SELECT
@@ -27,14 +41,12 @@ export async function getDashboard({
       FROM transactions t
       JOIN accounts a
         ON t.account_id = a.id
-      JOIN currencies c
-        ON a.currency_id = c.id
 
       WHERE t.date >= ?
         AND t.date < ?
-        AND c.code = ?
+        AND a.currency_id = ?
     `,
-    [start, end, currency]
+    [start, end, currencyRow.id]
   );
 
   const byCategory = await all(
@@ -48,22 +60,21 @@ export async function getDashboard({
         ON t.category_id = cat.id
       JOIN accounts a
         ON t.account_id = a.id
-      JOIN currencies c
-        ON a.currency_id = c.id
 
       WHERE t.type = 'expense'
         AND t.date >= ?
         AND t.date < ?
-        AND c.code = ?
+        AND a.currency_id = ?
 
       GROUP BY cat.id, cat.name
       ORDER BY total DESC
     `,
-    [start, end, currency]
+    [start, end, currencyRow.id]
   );
 
   return {
     currency,
+    decimalPlaces: currencyRow.decimalPlaces,
     totalIncome: totals.totalIncome,
     totalExpense: totals.totalExpense,
     net: totals.totalIncome - totals.totalExpense,
