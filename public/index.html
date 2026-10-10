@@ -30,7 +30,7 @@
     
         <label>
           Amount
-          <input id="transaction-amount" type="number" min="0.01" step="0.01" required>
+          <input id="transaction-amount" type="number" min="0.01" step="any" required>
         </label>
     
         <label>
@@ -61,7 +61,7 @@
           <textarea id="transaction-notes"></textarea>
         </label>
     
-        <p id="form-error"></p>
+        <p id="form-error" class="form-error"></p>
     
         <div class="form-actions">
           <button type="button" id="cancel-transaction">
@@ -70,6 +70,97 @@
     
           <button type="submit">
             Save
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="transfer-dialog">
+      <form id="transfer-form">
+        <h2>New Transfer</h2>
+
+        <label>
+          From account
+          <select id="transfer-source" required></select>
+        </label>
+
+        <label>
+          To account
+          <select id="transfer-destination" required></select>
+        </label>
+
+        <label>
+          Sent amount
+          <input id="transfer-sent" type="number" min="0.01" step="any" required>
+        </label>
+
+        <label>
+          Received amount
+          <input id="transfer-received" type="number" min="0.01" step="any">
+        </label>
+
+        <label>
+          Exchange rate
+          <input id="transfer-rate" type="number" min="0" step="any" required>
+        </label>
+
+        <label>
+          Sent date
+          <input id="transfer-sent-date" type="date" required>
+        </label>
+
+        <label>
+          Received date
+          <input id="transfer-received-date" type="date">
+        </label>
+
+        <label>
+          Status
+          <select id="transfer-status">
+            <option value="completed">Completed</option>
+            <option value="pending">Pending</option>
+          </select>
+        </label>
+
+        <p id="transfer-error" class="form-error"></p>
+
+        <div class="form-actions">
+          <button type="button" id="cancel-transfer">
+            Cancel
+          </button>
+
+          <button type="submit">
+            Save
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="complete-transfer-dialog">
+      <form id="complete-transfer-form">
+        <h2>Complete Transfer</h2>
+
+        <p id="complete-transfer-info" class="muted"></p>
+
+        <label>
+          Received amount
+          <input id="complete-received" type="number" min="0.01" step="any" required>
+        </label>
+
+        <label>
+          Received date
+          <input id="complete-received-date" type="date" required>
+        </label>
+
+        <p id="complete-transfer-error" class="form-error"></p>
+
+        <div class="form-actions">
+          <button type="button" id="cancel-complete-transfer">
+            Cancel
+          </button>
+
+          <button type="submit">
+            Complete
           </button>
         </div>
       </form>
@@ -87,10 +178,7 @@
         
           <label>
             Currency
-            <select id="currency-filter">
-              <option value="USD">USD</option>
-              <option value="VND">VND</option>
-            </select>
+            <select id="currency-filter"></select>
           </label>
         </div>
       </div>
@@ -129,6 +217,17 @@
       </div>
 
       <div id="transactions"></div>
+    </section>
+
+    <section>
+      <div class="section-header">
+        <h2>Transfers</h2>
+        <button id="add-transfer">
+          + New Transfer
+        </button>
+      </div>
+
+      <div id="transfers"></div>
     </section>
   </main>
 

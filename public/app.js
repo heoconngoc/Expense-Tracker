@@ -1,13 +1,44 @@
 let editingTransactionId = null;
+let completingTransfer = null;
+
+const accountsById = new Map();
 
 const dialog =
   document.querySelector("#transaction-dialog");
+
+const transferDialog =
+  document.querySelector("#transfer-dialog");
+
+const completeDialog =
+  document.querySelector("#complete-transfer-dialog");
 
 const addButton =
   document.querySelector("#add-transaction");
 
 const cancelButton =
   document.querySelector("#cancel-transaction");
+
+const addTransferButton =
+  document.querySelector("#add-transfer");
+
+const cancelTransferButton =
+  document.querySelector("#cancel-transfer");
+
+const cancelCompleteButton =
+  document.querySelector("#cancel-complete-transfer");
+
+function toMinors(value, decimalPlaces) {
+  return Math.round(value * 10 ** decimalPlaces);
+}
+
+function formatMoney(minorAmount, currencyCode, decimalPlaces) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: currencyCode,
+    minimumFractionDigits: decimalPlaces,
+    maximumFractionDigits: decimalPlaces,
+  }).format(minorAmount / 10 ** decimalPlaces);
+}
 
 addButton.addEventListener("click", () => {
   editingTransactionId = null;
@@ -27,6 +58,28 @@ addButton.addEventListener("click", () => {
 
 cancelButton.addEventListener("click", () => {
   dialog.close();
+});
+
+addTransferButton.addEventListener("click", () => {
+  transferForm.reset();
+
+  document.querySelector(
+    "#transfer-sent-date"
+  ).value = getToday();
+
+  document.querySelector(
+    "#transfer-error"
+  ).textContent = "";
+
+  transferDialog.showModal();
+});
+
+cancelTransferButton.addEventListener("click", () => {
+  transferDialog.close();
+});
+
+cancelCompleteButton.addEventListener("click", () => {
+  completeDialog.close();
 });
 
 const monthFilter =
@@ -66,13 +119,6 @@ function getToday() {
   return `${year}-${month}-${day}`;
 }
 
-function formatCurrency(amount, currencyCode) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: currencyCode,
-  }).format(amount);
-}
-
 function getMonthRange(month) {
   const [year, monthNumber] = month
     .split("-")
@@ -96,6 +142,36 @@ function getMonthRange(month) {
   const end = `${endYear}-${endMonth}-01`;
 
   return { start, end };
+}
+
+async function loadCurrencies() {
+  const response = await fetch("/currencies?active=1");
+
+  if (!response.ok) {
+    throw new Error("Failed to load currencies");
+  }
+
+  const currencies = await response.json();
+
+  const select =
+    document.querySelector("#currency-filter");
+
+  const previous = select.value;
+
+  select.replaceChildren();
+
+  for (const currency of currencies) {
+    const option = document.createElement("option");
+
+    option.value = currency.code;
+    option.textContent = currency.code;
+
+    select.append(option);
+  }
+
+  if (previous) {
+    select.value = previous;
+  }
 }
 
 async function loadCategories() {
@@ -122,21 +198,10 @@ async function loadCategories() {
   }
 }
 
-async function loadAccountOptions() {
-  const response = await fetch("/accounts");
-
-  if (!response.ok) {
-    throw new Error("Failed to load accounts");
-  }
-
-  const accounts = await response.json();
-
-  const select =
-    document.querySelector("#transaction-account");
-
+function fillAccountSelect(select) {
   select.replaceChildren();
 
-  for (const account of accounts) {
+  for (const account of accountsById.values()) {
     const option = document.createElement("option");
 
     option.value = account.id;
@@ -145,6 +210,34 @@ async function loadAccountOptions() {
 
     select.append(option);
   }
+}
+
+async function loadAccountOptions() {
+  const response = await fetch("/accounts?active=1");
+
+  if (!response.ok) {
+    throw new Error("Failed to load accounts");
+  }
+
+  const accounts = await response.json();
+
+  accountsById.clear();
+
+  for (const account of accounts) {
+    accountsById.set(account.id, account);
+  }
+
+  fillAccountSelect(
+    document.querySelector("#transaction-account")
+  );
+
+  fillAccountSelect(
+    document.querySelector("#transfer-source")
+  );
+
+  fillAccountSelect(
+    document.querySelector("#transfer-destination")
+  );
 }
 
 async function loadAccounts() {
@@ -168,12 +261,21 @@ async function loadAccounts() {
 
     const balance = document.createElement("p");
     balance.textContent =
-      formatCurrency(
+      formatMoney(
         account.balance,
-        account.currency
+        account.currency,
+        account.decimalPlaces
       );
 
     card.append(name, balance);
+
+    if (!account.isActive) {
+      const badge = document.createElement("span");
+      badge.className = "badge";
+      badge.textContent = "Archived";
+      card.append(badge);
+    }
+
     container.append(card);
   }
 }
@@ -245,11 +347,7 @@ async function loadTransactions() {
           throw new Error("Failed to delete transaction");
         }
 
-        await Promise.all([
-          loadAccounts(),
-          loadTransactions(),
-          loadDashboard(),
-        ]);
+        await refreshAll();
       } catch (err) {
         console.error(err);
       }
@@ -264,7 +362,10 @@ async function loadTransactions() {
 
       document.querySelector(
         "#transaction-amount"
-      ).value = transaction.amount;
+      ).value = (
+        transaction.amount /
+        10 ** transaction.decimalPlaces
+      ).toFixed(transaction.decimalPlaces);
 
       document.querySelector(
         "#transaction-type"
@@ -298,9 +399,10 @@ async function loadTransactions() {
         ? "amount income"
         : "amount expense";
 
-    const formattedAmount = formatCurrency(
+    const formattedAmount = formatMoney(
       transaction.amount,
-      transaction.currency
+      transaction.currency,
+      transaction.decimalPlaces
     );
 
     amount.textContent =
@@ -318,12 +420,112 @@ async function loadTransactions() {
   }
 }
 
+async function loadTransfers() {
+  const response = await fetch("/transfers");
+
+  if (!response.ok) {
+    throw new Error("Failed to load transfers");
+  }
+
+  const transfers = await response.json();
+
+  const container = document.querySelector("#transfers");
+  container.replaceChildren();
+
+  for (const transfer of transfers) {
+    const row = document.createElement("article");
+    row.className = "transaction-row";
+
+    const info = document.createElement("div");
+
+    const title = document.createElement("strong");
+    title.textContent =
+      `${transfer.sourceAccount} → ${transfer.destinationAccount}`;
+
+    const sent = formatMoney(
+      transfer.sentAmount,
+      transfer.sourceCurrency,
+      transfer.sourceDecimalPlaces
+    );
+
+    const received =
+      transfer.receivedAmount === null
+        ? "—"
+        : formatMoney(
+            transfer.receivedAmount,
+            transfer.destinationCurrency,
+            transfer.destinationDecimalPlaces
+          );
+
+    const details = document.createElement("p");
+    details.textContent =
+      `${transfer.sentDate} · ${sent} → ${received} · rate ${transfer.exchangeRate}`;
+
+    info.append(title, details);
+
+    const rightSide = document.createElement("div");
+    rightSide.className = "transaction-right";
+
+    const badge = document.createElement("span");
+    badge.className =
+      transfer.status === "pending"
+        ? "badge badge-pending"
+        : "badge badge-completed";
+    badge.textContent = transfer.status;
+
+    rightSide.append(badge);
+
+    if (transfer.status === "pending") {
+      const completeButton = document.createElement("button");
+      completeButton.type = "button";
+      completeButton.className = "edit-button";
+      completeButton.textContent = "Complete";
+
+      completeButton.addEventListener("click", () => {
+        openCompleteTransfer(transfer);
+      });
+
+      rightSide.append(completeButton);
+    }
+
+    row.append(info, rightSide);
+    container.append(row);
+  }
+}
+
+function openCompleteTransfer(transfer) {
+  completingTransfer = transfer;
+
+  document.querySelector(
+    "#complete-transfer-info"
+  ).textContent =
+    `${transfer.sourceAccount} → ${transfer.destinationAccount} · ${transfer.sentDate}`;
+
+  document.querySelector(
+    "#complete-transfer-form"
+  ).reset();
+
+  document.querySelector(
+    "#complete-received-date"
+  ).value = getToday();
+
+  document.querySelector(
+    "#complete-transfer-error"
+  ).textContent = "";
+
+  completeDialog.showModal();
+}
+
 async function loadDashboard() {
   const month =
     document.querySelector("#month-filter").value;
 
   const currency =
     document.querySelector("#currency-filter").value;
+
+  if (!month || !currency) {
+    return;
+  }
 
   const { start, end } = getMonthRange(month);
 
@@ -343,21 +545,24 @@ async function loadDashboard() {
   const dashboard = await response.json();
 
   document.querySelector("#income").textContent =
-    formatCurrency(
+    formatMoney(
       dashboard.totalIncome,
-      dashboard.currency
+      dashboard.currency,
+      dashboard.decimalPlaces
     );
 
   document.querySelector("#expense").textContent =
-    formatCurrency(
+    formatMoney(
       dashboard.totalExpense,
-      dashboard.currency
+      dashboard.currency,
+      dashboard.decimalPlaces
     );
 
   document.querySelector("#net").textContent =
-    formatCurrency(
+    formatMoney(
       dashboard.net,
-      dashboard.currency
+      dashboard.currency,
+      dashboard.decimalPlaces
     );
 }
 
@@ -367,16 +572,28 @@ const form =
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
 
+  const accountId = Number(
+    document.querySelector("#transaction-account").value
+  );
+
+  const account = accountsById.get(accountId);
+
+  const decimalPlaces = account
+    ? account.decimalPlaces
+    : 2;
+
   const transaction = {
     name:
       document.querySelector("#transaction-name")
         .value.trim(),
 
-    amount:
+    amount: toMinors(
       Number(
         document.querySelector("#transaction-amount")
           .value
       ),
+      decimalPlaces
+    ),
 
     type:
       document.querySelector("#transaction-type")
@@ -392,11 +609,7 @@ form.addEventListener("submit", async (event) => {
           .value
       ),
 
-    accountId:
-      Number(
-        document.querySelector("#transaction-account")
-          .value
-      ),
+    accountId,
 
     notes:
       document.querySelector("#transaction-notes")
@@ -435,25 +648,168 @@ form.addEventListener("submit", async (event) => {
     form.reset();
     dialog.close();
 
-    await Promise.all([
-      loadAccounts(),
-      loadTransactions(),
-      loadDashboard(),
-    ]);
+    await refreshAll();
   } catch (err) {
     document.querySelector("#form-error").textContent =
       err.message;
   }
 });
 
+const transferForm =
+  document.querySelector("#transfer-form");
+
+transferForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  const sourceAccountId = Number(
+    document.querySelector("#transfer-source").value
+  );
+
+  const destinationAccountId = Number(
+    document.querySelector("#transfer-destination").value
+  );
+
+  const source = accountsById.get(sourceAccountId);
+  const destination = accountsById.get(destinationAccountId);
+
+  const receivedValue =
+    document.querySelector("#transfer-received").value;
+
+  const status =
+    document.querySelector("#transfer-status").value;
+
+  const transfer = {
+    sourceAccountId,
+    destinationAccountId,
+
+    sentAmount: toMinors(
+      Number(document.querySelector("#transfer-sent").value),
+      source ? source.decimalPlaces : 2
+    ),
+
+    receivedAmount:
+      receivedValue === ""
+        ? null
+        : toMinors(
+            Number(receivedValue),
+            destination ? destination.decimalPlaces : 2
+          ),
+
+    exchangeRate: Number(
+      document.querySelector("#transfer-rate").value
+    ),
+
+    status,
+
+    sentDate:
+      document.querySelector("#transfer-sent-date").value,
+
+    receivedDate:
+      document.querySelector("#transfer-received-date").value ||
+      null,
+  };
+
+  try {
+    const response = await fetch("/transfers", {
+      method: "POST",
+
+      headers: {
+        "Content-Type": "application/json",
+      },
+
+      body: JSON.stringify(transfer),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "Failed to create transfer");
+    }
+
+    transferForm.reset();
+    transferDialog.close();
+
+    await refreshAll();
+  } catch (err) {
+    document.querySelector("#transfer-error").textContent =
+      err.message;
+  }
+});
+
+const completeForm =
+  document.querySelector("#complete-transfer-form");
+
+completeForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  if (!completingTransfer) {
+    return;
+  }
+
+  const transfer = {
+    receivedAmount: toMinors(
+      Number(document.querySelector("#complete-received").value),
+      completingTransfer.destinationDecimalPlaces
+    ),
+
+    receivedDate:
+      document.querySelector("#complete-received-date").value,
+  };
+
+  try {
+    const response = await fetch(
+      `/transfers/${completingTransfer.id}`,
+      {
+        method: "PATCH",
+
+        headers: {
+          "Content-Type": "application/json",
+        },
+
+        body: JSON.stringify(transfer),
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data.error || "Failed to complete transfer"
+      );
+    }
+
+    completeForm.reset();
+    completeDialog.close();
+    completingTransfer = null;
+
+    await refreshAll();
+  } catch (err) {
+    document.querySelector(
+      "#complete-transfer-error"
+    ).textContent = err.message;
+  }
+});
+
+async function refreshAll() {
+  await Promise.all([
+    loadAccounts(),
+    loadTransactions(),
+    loadDashboard(),
+    loadTransfers(),
+  ]);
+}
+
 async function initialize() {
   try {
     setDefaultMonth();
+
+    await loadCurrencies();
 
     await Promise.all([
       loadAccounts(),
       loadTransactions(),
       loadDashboard(),
+      loadTransfers(),
       loadCategories(),
       loadAccountOptions(),
     ]);
