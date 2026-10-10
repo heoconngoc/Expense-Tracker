@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="vi">
 
 <head>
   <meta charset="UTF-8">
@@ -11,224 +11,396 @@
 </head>
 
 <body>
-  <main class="container">
-    <header>
-      <div>
+  <header class="app-header">
+    <div class="container header-inner">
+      <div class="brand">
         <p class="eyebrow">Personal Finance</p>
         <h1>Expense Tracker</h1>
       </div>
-    </header>
+
+      <nav class="nav-tabs">
+        <button type="button" class="tab active" data-tab="dashboard">Tổng quan</button>
+        <button type="button" class="tab" data-tab="transactions">Giao dịch</button>
+        <button type="button" class="tab" data-tab="transfers">Chuyển khoản</button>
+        <button type="button" class="tab" data-tab="settings">Quản lý</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
 
     <dialog id="transaction-dialog">
-      <form id="transaction-form">
-        <h2>Add Transaction</h2>
-    
+      <form id="transaction-form" class="dialog-form">
+        <h2 id="transaction-form-title">Thêm giao dịch</h2>
+
         <label>
-          Name
+          Tên
           <input id="transaction-name" type="text" required>
         </label>
-    
+
         <label>
-          Amount
+          Số tiền
           <input id="transaction-amount" type="number" min="0.01" step="any" required>
         </label>
-    
+
         <label>
-          Type
+          Loại
           <select id="transaction-type">
-            <option value="expense">Expense</option>
-            <option value="income">Income</option>
+            <option value="expense">Chi tiêu</option>
+            <option value="income">Thu nhập</option>
           </select>
         </label>
-    
+
         <label>
-          Date
+          Ngày
           <input id="transaction-date" type="date" required>
         </label>
-    
+
         <label>
-          Category
+          Danh mục
           <select id="transaction-category" required></select>
         </label>
-    
+
         <label>
-          Account
+          Tài khoản
           <select id="transaction-account" required></select>
         </label>
-    
+
         <label>
-          Notes
+          Ghi chú
           <textarea id="transaction-notes"></textarea>
         </label>
-    
+
         <p id="form-error" class="form-error"></p>
-    
+
         <div class="form-actions">
-          <button type="button" id="cancel-transaction">
-            Cancel
-          </button>
-    
-          <button type="submit">
-            Save
-          </button>
+          <button type="button" id="cancel-transaction" class="button ghost">Hủy</button>
+          <button type="submit" class="button">Lưu</button>
         </div>
       </form>
     </dialog>
 
     <dialog id="transfer-dialog">
-      <form id="transfer-form">
-        <h2>New Transfer</h2>
+      <form id="transfer-form" class="dialog-form">
+        <h2>Chuyển khoản mới</h2>
 
         <label>
-          From account
+          Từ tài khoản
           <select id="transfer-source" required></select>
         </label>
 
         <label>
-          To account
+          Đến tài khoản
           <select id="transfer-destination" required></select>
         </label>
 
         <label>
-          Sent amount
+          Số tiền gửi
           <input id="transfer-sent" type="number" min="0.01" step="any" required>
         </label>
 
         <label>
-          Received amount
+          Số tiền nhận
           <input id="transfer-received" type="number" min="0.01" step="any">
         </label>
 
         <label>
-          Exchange rate
+          Tỷ giá
           <input id="transfer-rate" type="number" min="0" step="any" required>
         </label>
 
         <label>
-          Sent date
+          Ngày gửi
           <input id="transfer-sent-date" type="date" required>
         </label>
 
         <label>
-          Received date
+          Ngày nhận
           <input id="transfer-received-date" type="date">
         </label>
 
         <label>
-          Status
+          Trạng thái
           <select id="transfer-status">
-            <option value="completed">Completed</option>
-            <option value="pending">Pending</option>
+            <option value="completed">Hoàn tất</option>
+            <option value="pending">Đang chờ</option>
           </select>
         </label>
 
         <p id="transfer-error" class="form-error"></p>
 
         <div class="form-actions">
-          <button type="button" id="cancel-transfer">
-            Cancel
-          </button>
-
-          <button type="submit">
-            Save
-          </button>
+          <button type="button" id="cancel-transfer" class="button ghost">Hủy</button>
+          <button type="submit" class="button">Lưu</button>
         </div>
       </form>
     </dialog>
 
     <dialog id="complete-transfer-dialog">
-      <form id="complete-transfer-form">
-        <h2>Complete Transfer</h2>
+      <form id="complete-transfer-form" class="dialog-form">
+        <h2>Hoàn tất chuyển khoản</h2>
 
         <p id="complete-transfer-info" class="muted"></p>
 
         <label>
-          Received amount
+          Số tiền nhận
           <input id="complete-received" type="number" min="0.01" step="any" required>
         </label>
 
         <label>
-          Received date
+          Ngày nhận
           <input id="complete-received-date" type="date" required>
         </label>
 
         <p id="complete-transfer-error" class="form-error"></p>
 
         <div class="form-actions">
-          <button type="button" id="cancel-complete-transfer">
-            Cancel
-          </button>
-
-          <button type="submit">
-            Complete
-          </button>
+          <button type="button" id="cancel-complete-transfer" class="button ghost">Hủy</button>
+          <button type="submit" class="button">Hoàn tất</button>
         </div>
       </form>
     </dialog>
 
-    <section>
+    <dialog id="account-dialog">
+      <form id="account-form" class="dialog-form">
+        <h2 id="account-form-title">Thêm tài khoản</h2>
+
+        <label>
+          Tên
+          <input id="account-name" type="text" required>
+        </label>
+
+        <label>
+          Tiền tệ
+          <select id="account-currency" required></select>
+        </label>
+
+        <div id="account-balance-field">
+          <label>
+            Số dư ban đầu
+            <input id="account-initial-balance" type="number" min="0" step="any" value="0">
+          </label>
+          <p id="account-balance-hint" class="muted"></p>
+        </div>
+
+        <label>
+          Trạng thái
+          <select id="account-active">
+            <option value="1">Hoạt động</option>
+            <option value="0">Đã lưu trữ</option>
+          </select>
+        </label>
+
+        <p id="account-error" class="form-error"></p>
+
+        <div class="form-actions">
+          <button type="button" id="cancel-account" class="button ghost">Hủy</button>
+          <button type="submit" class="button">Lưu</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="category-dialog">
+      <form id="category-form" class="dialog-form">
+        <h2 id="category-form-title">Thêm danh mục</h2>
+
+        <label>
+          Tên
+          <input id="category-name" type="text" required>
+        </label>
+
+        <label>
+          Trạng thái
+          <select id="category-active">
+            <option value="1">Hoạt động</option>
+            <option value="0">Đã lưu trữ</option>
+          </select>
+        </label>
+
+        <p id="category-error" class="form-error"></p>
+
+        <div class="form-actions">
+          <button type="button" id="cancel-category" class="button ghost">Hủy</button>
+          <button type="submit" class="button">Lưu</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="currency-dialog">
+      <form id="currency-form" class="dialog-form">
+        <h2 id="currency-form-title">Thêm tiền tệ</h2>
+
+        <div id="currency-code-field">
+          <label>
+            Mã
+            <input id="currency-code" type="text" maxlength="5" placeholder="EUR" required>
+          </label>
+          <p class="muted">2-5 chữ cái, ví dụ: USD, VND, EUR.</p>
+        </div>
+
+        <label>
+          Tên
+          <input id="currency-name" type="text" placeholder="Euro" required>
+        </label>
+
+        <label>
+          Ký hiệu
+          <input id="currency-symbol" type="text" placeholder="€" required>
+        </label>
+
+        <div id="currency-decimal-field">
+          <label>
+            Số chữ số thập phân
+            <select id="currency-decimal-places">
+              <option value="0">0 (đồng)</option>
+              <option value="1">1</option>
+              <option value="2" selected>2 (cents)</option>
+              <option value="3">3</option>
+            </select>
+          </label>
+          <p class="muted">Xác định đơn vị nhỏ nhất. Không thể sửa sau khi đã dùng.</p>
+        </div>
+
+        <label>
+          Trạng thái
+          <select id="currency-active">
+            <option value="1">Hoạt động</option>
+            <option value="0">Đã lưu trữ</option>
+          </select>
+        </label>
+
+        <p id="currency-error" class="form-error"></p>
+
+        <div class="form-actions">
+          <button type="button" id="cancel-currency" class="button ghost">Hủy</button>
+          <button type="submit" class="button">Lưu</button>
+        </div>
+      </form>
+    </dialog>
+
+    <section id="tab-dashboard" class="tab-panel active">
       <div class="section-header">
-        <h2>Summary</h2>
-    
+        <div>
+          <h2>Tổng quan</h2>
+        </div>
+
         <div class="filters">
           <label>
-            Month
+            Tháng
             <input id="month-filter" type="month">
           </label>
-        
+
           <label>
-            Currency
+            Tiền tệ
             <select id="currency-filter"></select>
           </label>
         </div>
       </div>
-    
+
       <div class="summary-grid">
-        <article class="card">
-          <p>Income</p>
+        <article class="card summary-card income">
+          <p>Thu nhập</p>
           <strong id="income">$0.00</strong>
         </article>
-    
-        <article class="card">
-          <p>Expenses</p>
+
+        <article class="card summary-card expense">
+          <p>Chi tiêu</p>
           <strong id="expense">$0.00</strong>
         </article>
-    
-        <article class="card">
-          <p>Net</p>
+
+        <article class="card summary-card">
+          <p>Chênh lệch</p>
           <strong id="net">$0.00</strong>
         </article>
       </div>
-    </section>
 
-    <section>
-      <h2>Accounts</h2>
-      <div id="accounts" class="account-grid"></div>
-    </section>
-
-    <section>
       <div class="section-header">
-        <h2 id="transaction-form-title">
-          Add Transaction
-        </h2>
-        <button id="add-transaction">
-          + Add Transaction
-        </button>
+        <div>
+          <h2>Tài khoản</h2>
+          <p class="muted">Bấm vào tài khoản để xem giao dịch của riêng tài khoản đó.</p>
+        </div>
+
+        <button type="button" class="button outline" data-action="add-account">+ Tài khoản</button>
+      </div>
+
+      <div id="accounts" class="account-grid"></div>
+
+      <div class="section-header">
+        <h2 id="account-transactions-title">Giao dịch</h2>
+      </div>
+
+      <div id="account-transactions"></div>
+    </section>
+
+    <section id="tab-transactions" class="tab-panel">
+      <div class="section-header">
+        <div>
+          <h2>Giao dịch</h2>
+        </div>
+
+        <button type="button" class="button" id="add-transaction">+ Giao dịch</button>
+      </div>
+
+      <div class="filters filter-row">
+        <label>
+          Tài khoản
+          <select id="transaction-filter-account"></select>
+        </label>
+
+        <label>
+          Loại
+          <select id="transaction-filter-type">
+            <option value="">Tất cả</option>
+            <option value="expense">Chi tiêu</option>
+            <option value="income">Thu nhập</option>
+          </select>
+        </label>
       </div>
 
       <div id="transactions"></div>
     </section>
 
-    <section>
+    <section id="tab-transfers" class="tab-panel">
       <div class="section-header">
-        <h2>Transfers</h2>
-        <button id="add-transfer">
-          + New Transfer
-        </button>
+        <div>
+          <h2>Chuyển khoản</h2>
+        </div>
+
+        <button type="button" class="button" id="add-transfer">+ Chuyển khoản</button>
       </div>
 
       <div id="transfers"></div>
     </section>
+
+    <section id="tab-settings" class="tab-panel">
+      <div class="section-header">
+        <div>
+          <h2>Tài khoản</h2>
+        </div>
+
+        <button type="button" class="button outline" data-action="add-account">+ Tài khoản</button>
+      </div>
+      <div id="manage-accounts" class="manage-list"></div>
+
+      <div class="section-header">
+        <div>
+          <h2>Danh mục</h2>
+        </div>
+
+        <button type="button" class="button outline" data-action="add-category">+ Danh mục</button>
+      </div>
+      <div id="manage-categories" class="manage-list"></div>
+
+      <div class="section-header">
+        <div>
+          <h2>Tiền tệ</h2>
+        </div>
+
+        <button type="button" class="button outline" data-action="add-currency">+ Tiền tệ</button>
+      </div>
+      <div id="manage-currencies" class="manage-list"></div>
+    </section>
+
   </main>
 
   <script type="module" src="/app.js"></script>
