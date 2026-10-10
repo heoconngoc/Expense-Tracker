@@ -23,15 +23,37 @@ The frontend is built with HTML, CSS, and vanilla JavaScript.
 
 It communicates with the backend through the REST API using `fetch()`.
 
+The UI is organized into four tabs so the user does not have to scroll
+through the whole application at once:
+
+- **Overview** – summary cards (month/currency filters), clickable
+  account cards, and the selected account's transactions
+- **Transactions** – full list with account and type filters
+- **Transfers** – list plus create/complete flows
+- **Management** – manage accounts, categories, and currencies
+
+Clicking an account card selects it, switches the summary currency to
+the account's currency, scopes the dashboard totals to that account,
+and shows its transactions below.
+
 The frontend supports:
 
 - Viewing account balances
-- Viewing transactions
-- Viewing monthly summaries
+- Viewing transactions, transfers, and monthly summaries
 - Filtering summaries by month and currency
-- Creating transactions
-- Updating transactions
-- Deleting transactions
+- Creating, updating, and deleting transactions
+- Creating and completing transfers
+- Managing accounts, categories, and currencies
+
+Dialogs are rendered natively with `<dialog>` elements and forms are
+submitted with `fetch()`.
+
+## Startup
+
+The server calls `initializeDatabase()` before listening. If the
+`accounts` table is missing, it creates the schema and applies
+`seed-reference.sql` (currencies, categories, app settings only). The
+book starts empty.
 
 ## Routes
 
@@ -41,6 +63,11 @@ They validate the HTTP contract and delegate business operations to
 the service layer.
 
 Routes do not contain SQL.
+
+Account, category, and currency routes expose `GET /`, `POST /`, and
+`PUT /:id` so each of these entities can be created and edited. Currencies
+cannot change their code or `decimal_places` after creation, and an
+account's currency cannot change once it has history.
 
 ## Services
 
@@ -54,6 +81,7 @@ Examples include:
 - Restoring balances when transactions are deleted
 - Performing transfers between accounts
 - Validating active accounts and categories
+- Creating, renaming, and archiving accounts, categories, and currencies
 
 Operations that modify multiple pieces of related data use SQLite
 transactions to maintain consistency.

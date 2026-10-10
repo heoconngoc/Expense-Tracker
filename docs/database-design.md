@@ -86,7 +86,19 @@ The application does not directly aggregate values from different
 currencies because doing so would produce financially meaningless
 totals without historical exchange-rate information.
 
-Dashboard calculations therefore operate within a selected currency.
+Dashboard calculations therefore operate within a selected currency,
+and can be scoped to a single account with an optional `accountId`
+filter.
+
+## Initialization
+
+On the first run the server creates the schema and seeds reference data
+only: currencies, categories, and app settings. There are no accounts,
+transactions, or transfers, so the user starts with an empty book.
+
+`database/seed-reference.sql` holds the reference data.
+`database/seed.sql` holds a full demo data set and is used by the
+automated tests.
 
 ## Account Balances
 
@@ -104,6 +116,21 @@ Accounts, categories, and currencies can be marked inactive.
 
 Historical records remain available, but new transactions cannot
 reference inactive accounts or categories.
+
+Archiving is used instead of deletion because an entry may still be
+referenced by historical transactions and transfers. A hard delete would
+either violate a foreign key or silently remove history.
+
+## Immutable Units
+
+Two values are fixed after creation because money already uses them as
+its unit:
+
+- A currency's `decimal_places` cannot be changed once balances exist.
+- An account's currency cannot be changed once the account has
+  transactions or transfers.
+
+Changing them would reinterpret existing balances and corrupt the data.
 
 ## Integrity
 

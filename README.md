@@ -15,6 +15,9 @@ The project focuses on relational database design, transactional consistency, RE
 - Create pending transfers and complete them later
 - View monthly income, expenses, and net totals
 - Filter dashboard summaries by month and currency
+- Start with an empty book and add accounts, categories, and currencies yourself
+- Manage accounts, categories, and currencies through the app
+- Click an account to see its transactions in its own currency
 - Store money as integers in the smallest unit of each currency
 - Archive accounts, categories, and currencies while preserving historical data
 - Maintain account balances with atomic database operations
@@ -134,6 +137,8 @@ are not financially meaningful without an exchange rate.
 
 Dashboard calculations therefore operate within a selected currency.
 
+When a specific account is selected, the dashboard is scoped to that account too.
+
 See [`docs/database-design.md`](docs/database-design.md) for more details.
 
 ### Money Representation
@@ -212,12 +217,19 @@ Transaction listing also supports filtering.
 | --- | --- | --- |
 | `GET` | `/accounts` | List accounts and balances |
 | `GET` | `/accounts?active=1` | List active accounts only |
+| `POST` | `/accounts` | Create an account (`name`, `currencyId`, `initialBalance`) |
+| `PUT` | `/accounts/:id` | Update name, currency, or active status |
+
+The currency of an account that already owns transactions or transfers cannot be changed.
 
 ### Categories
 
 | Method | Endpoint | Description |
 | --- | --- | --- |
-| `GET` | `/categories` | List categories |
+| `GET` | `/categories` | List active categories |
+| `GET` | `/categories?all=1` | List categories including archived |
+| `POST` | `/categories` | Create a category (`name`) |
+| `PUT` | `/categories/:id` | Update name or active status |
 
 ### Currencies
 
@@ -225,6 +237,11 @@ Transaction listing also supports filtering.
 | --- | --- | --- |
 | `GET` | `/currencies` | List currencies |
 | `GET` | `/currencies?active=1` | List active currencies only |
+| `GET` | `/currencies?all=1` | List currencies including archived |
+| `POST` | `/currencies` | Create a currency (`code`, `name`, `symbol`, `decimalPlaces`) |
+| `PUT` | `/currencies/:id` | Update name, symbol, or active status |
+
+A currency's code and `decimalPlaces` are fixed after creation because balances use them as their unit.
 
 ### Transfers
 
@@ -245,6 +262,12 @@ Example:
 
 ```text
 GET /dashboard?start=2026-10-01&end=2026-11-01&currency=USD
+```
+
+`accountId` is an optional filter that scopes the totals to one account:
+
+```text
+GET /dashboard?start=2026-10-01&end=2026-11-01&currency=USD&accountId=3
 ```
 
 Example response:
@@ -271,20 +294,30 @@ All amounts in the response are integers in the smallest unit of the selected cu
 
 The frontend is served directly by Express and communicates with the REST API using `fetch()`.
 
+It is organized into four tabs to avoid long scrolling:
+
+- **Tổng quan (Overview)** – monthly income, expense, and net cards with month/currency filters, clickable account cards, and the selected account's transactions
+- **Giao dịch (Transactions)** – full transaction list with account and type filters
+- **Chuyển khoản (Transfers)** – transfer list plus creating and completing transfers
+- **Quản lý (Management)** – adding, editing, and archiving accounts, categories, and currencies
+
+Clicking an account card selects it (highlighted), switches the summary currency to the account's currency, scopes the totals to that account, and lists its transactions below.
+
 It supports:
 
 - Viewing account balances
 - Viewing transactions
 - Viewing monthly financial summaries
 - Filtering summaries by month and currency
-- Adding transactions
-- Editing transactions
-- Deleting transactions
+- Adding, editing, and deleting transactions
 - Viewing transfers
 - Creating transfers
 - Completing pending transfers
+- Managing accounts, categories, and currencies
 
 Because the API works in minor units, the frontend converts amounts to and from display format using each currency's `decimalPlaces`.
+
+When the database is empty, the frontend shows helpful empty states and guides the user to create their first account.
 
 After data changes, the relevant frontend data is refreshed so account balances, transaction history, transfers, and dashboard totals remain synchronized.
 
@@ -296,6 +329,7 @@ expense-tracker/
 │   ├── migrations/
 │   │   └── 001_money_to_integer.sql
 │   ├── schema.sql
+│   ├── seed-reference.sql
 │   ├── seed.sql
 │   └── queries.sql
 │
@@ -334,6 +368,7 @@ expense-tracker/
 │   ├── setup.js
 │   ├── api.test.js
 │   ├── database.test.js
+│   ├── manage.test.js
 │   ├── transactionService.test.js
 │   └── transferService.test.js
 │
@@ -374,19 +409,23 @@ cd expense-tracker
 npm install
 ```
 
-### Create the Database
-
-Create the SQLite development database from the schema:
+### Start the Application
 
 ```bash
-sqlite3 database/expense.db < database/schema.sql
+npm start
 ```
 
-Load the sample data:
+On the first run the application creates the database automatically and seeds only reference data (USD/VND currencies and a few default categories). It does **not** seed accounts, transactions, or transfers — the book starts empty so you can add your own data.
 
-```bash
-sqlite3 database/expense.db < database/seed.sql
+The application runs by default at:
+
+```text
+http://localhost:3000
 ```
+
+Open that address in a browser to use the frontend.
+
+The port can also be configured through the `PORT` environment variable.
 
 The database files themselves are ignored by Git, so each development environment can create its own local database.
 
@@ -400,21 +439,15 @@ sqlite3 database/expense.db < database/migrations/001_money_to_integer.sql
 
 `001_money_to_integer.sql` converts money from decimal base units to integer minor units. SQLite cannot change a column type with `ALTER TABLE`, so the migration recreates the affected tables and copies the data across inside a single transaction.
 
-### Start the Application
+### Sample Data (optional)
+
+`database/seed.sql` contains demo accounts, transactions, and transfers. It is used by the automated tests and can be loaded manually for exploration:
 
 ```bash
-npm start
+sqlite3 database/dev.db < database/schema.sql
+sqlite3 database/dev.db < database/seed-reference.sql
+sqlite3 database/dev.db < database/seed.sql
 ```
-
-The application runs by default at:
-
-```text
-http://localhost:3000
-```
-
-Open that address in a browser to use the frontend.
-
-The port can also be configured through the `PORT` environment variable.
 
 ## Testing
 
@@ -516,7 +549,7 @@ Possible future extensions include:
 - Charts and financial visualizations
 - Pagination
 - More advanced transaction filtering
-- Managing accounts, categories, and currencies through the API
+- Budgets and recurring transactions
 - Deployment
 - Logging and monitoring
 
