@@ -3,6 +3,7 @@ CREATE TABLE currencies (
   code TEXT NOT NULL UNIQUE,
   currency_name TEXT NOT NULL,
   symbol TEXT NOT NULL,
+  decimal_places INTEGER NOT NULL DEFAULT 2 CHECK (decimal_places >= 0),
   is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1))
 );
 
@@ -16,7 +17,7 @@ CREATE TABLE accounts (
   id INTEGER PRIMARY KEY,
   name TEXT NOT NULL UNIQUE,
   currency_id INTEGER NOT NULL,
-  balance NUMERIC NOT NULL,
+  balance INTEGER NOT NULL CHECK (balance = CAST(balance AS INTEGER)),
   is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
 
   FOREIGN KEY (currency_id) REFERENCES currencies(id)
@@ -25,7 +26,7 @@ CREATE TABLE accounts (
 CREATE TABLE transactions (
   id INTEGER PRIMARY KEY,
   name TEXT NOT NULL,
-  amount NUMERIC NOT NULL CHECK (amount > 0),
+  amount INTEGER NOT NULL CHECK (amount > 0),
   type TEXT NOT NULL CHECK (type IN ('income', 'expense')),
   date  TIMESTAMP NOT NULL,
   notes TEXT,
@@ -40,9 +41,9 @@ CREATE TABLE transfers (
   id INTEGER PRIMARY KEY,
   source_account_id INTEGER NOT NULL,
   destination_account_id INTEGER NOT NULL,
-  sent_amount NUMERIC NOT NULL CHECK (sent_amount > 0),
-  received_amount NUMERIC CHECK (received_amount IS NULL OR received_amount > 0),
-  exchange_rate NUMERIC NOT NULL CHECK (exchange_rate > 0),
+  sent_amount INTEGER NOT NULL CHECK (sent_amount > 0),
+  received_amount INTEGER CHECK (received_amount IS NULL OR received_amount > 0),
+  exchange_rate INTEGER NOT NULL CHECK (exchange_rate > 0),
   status TEXT NOT NULL CHECK (status IN ('pending', 'completed')),
   sent_date TIMESTAMP NOT NULL,
   received_date TIMESTAMP,

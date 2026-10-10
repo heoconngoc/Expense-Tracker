@@ -1,12 +1,15 @@
 -- Currencies
+-- Money is stored as integers in the smallest unit of each currency:
+--   USD -> cents (decimal_places = 2)
+--   VND -> dong  (decimal_places = 0)
 
 INSERT INTO currencies
-  (code, currency_name, symbol)
-  VALUES ('USD', 'US Dollar', '$');
+  (code, currency_name, symbol, decimal_places)
+  VALUES ('USD', 'US Dollar', '$', 2);
 
 INSERT INTO currencies
-  (code, currency_name, symbol)
-  VALUES ('VND', 'Vietnamese Dong', '₫');
+  (code, currency_name, symbol, decimal_places)
+  VALUES ('VND', 'Vietnamese Dong', '₫', 0);
 
 -- App Setting
 
@@ -37,10 +40,11 @@ INSERT INTO categories
   VALUES ('Tourism');
   
 -- Accounts
+-- Balances are integers in minor units (USD cents / VND dong).
 
 INSERT INTO accounts
   (name, currency_id, balance)
-  VALUES ('BofA Debit Card', 1, 1000);
+  VALUES ('BofA Debit Card', 1, 100000);
 
 INSERT INTO accounts
   (name, currency_id, balance)
@@ -48,29 +52,30 @@ INSERT INTO accounts
 
 INSERT INTO accounts
   (name, currency_id, balance)
-  VALUES ('USD cash', 1, 100);
+  VALUES ('USD cash', 1, 10000);
 
 INSERT INTO accounts
   (name, currency_id, balance)
   VALUES ('VND cash', 2, 1000000);
 
 -- September transactions
+-- Amounts are integers in minor units of the account's currency.
 
 INSERT INTO transactions
   (name, amount, type, date, notes, category_id, account_id)
-  VALUES ('September Salary', 1200, 'income', '2026-09-05', NULL, 2, 1);
+  VALUES ('September Salary', 120000, 'income', '2026-09-05', NULL, 2, 1);
 
 INSERT INTO transactions
   (name, amount, type, date, notes, category_id, account_id)
-  VALUES ('Chipotle', 14.50, 'expense', '2026-09-08', NULL, 1, 1);
+  VALUES ('Chipotle', 1450, 'expense', '2026-09-08', NULL, 1, 1);
 
 INSERT INTO transactions
   (name, amount, type, date, notes, category_id, account_id)
-  VALUES ('Bus Ticket', 25, 'expense', '2026-09-12', NULL, 3, 1);
+  VALUES ('Bus Ticket', 2500, 'expense', '2026-09-12', NULL, 3, 1);
 
 INSERT INTO transactions
   (name, amount, type, date, notes, category_id, account_id)
-  VALUES ('Textbook', 75, 'expense', '2026-09-20', 'Database textbook', 4, 1);
+  VALUES ('Textbook', 7500, 'expense', '2026-09-20', 'Database textbook', 4, 1);
 
 INSERT INTO transactions
   (name, amount, type, date, notes, category_id, account_id)
@@ -80,23 +85,23 @@ INSERT INTO transactions
 
 INSERT INTO transactions
   (name, amount, type, date, notes, category_id, account_id)
-  VALUES ('October Salary', 1200, 'income', '2026-10-01', NULL, 2, 1);
+  VALUES ('October Salary', 120000, 'income', '2026-10-01', NULL, 2, 1);
 
 INSERT INTO transactions
   (name, amount, type, date, notes, category_id, account_id)
-  VALUES ('Chipotle', 15.25, 'expense', '2026-10-02', NULL, 1, 1);
+  VALUES ('Chipotle', 1525, 'expense', '2026-10-02', NULL, 1, 1);
 
 INSERT INTO transactions
   (name, amount, type, date, notes, category_id, account_id)
-  VALUES ('Coffee', 5.50, 'expense', '2026-10-03', NULL, 1, 3);
+  VALUES ('Coffee', 550, 'expense', '2026-10-03', NULL, 1, 3);
 
 INSERT INTO transactions
   (name, amount, type, date, notes, category_id, account_id)
-  VALUES ('Train Ticket', 45, 'expense', '2026-10-04', 'Weekend trip', 3, 1);
+  VALUES ('Train Ticket', 4500, 'expense', '2026-10-04', 'Weekend trip', 3, 1);
 
 INSERT INTO transactions
   (name, amount, type, date, notes, category_id, account_id)
-  VALUES ('Museum Ticket', 20, 'expense', '2026-10-05', NULL, 5, 3);
+  VALUES ('Museum Ticket', 2000, 'expense', '2026-10-05', NULL, 5, 3);
 
 INSERT INTO transactions
   (name, amount, type, date, notes, category_id, account_id)
@@ -104,7 +109,11 @@ INSERT INTO transactions
 
 INSERT INTO transactions
   (name, amount, type, date, notes, category_id, account_id)
-  VALUES ('Online Course', 49.99, 'expense', '2026-10-06', 'SQLite course', 4, 1);
+  VALUES ('Online Course', 4999, 'expense', '2026-10-06', 'SQLite course', 4, 1);
+
+-- Transfers
+-- sent_amount / received_amount are minor units.
+-- exchange_rate is stored as an integer in micro units (rate * 1_000_000).
 
 INSERT INTO transfers
   (
@@ -121,9 +130,9 @@ INSERT INTO transfers
   (
     1,
     3,
-    100,
-    100,
-    1,
+    10000,
+    10000,
+    1000000,
     'completed',
     '2026-09-10',
     '2026-09-10'
@@ -144,9 +153,9 @@ INSERT INTO transfers
   (
     1,
     2,
-    200,
+    20000,
     5200000,
-    26000,
+    26000000000,
     'completed',
     '2026-09-15',
     '2026-09-16'
@@ -167,9 +176,9 @@ INSERT INTO transfers
   (
     1,
     2,
-    50,
+    5000,
     NULL,
-    26000,
+    26000000000,
     'pending',
     '2026-10-06',
     NULL
