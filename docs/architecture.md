@@ -66,17 +66,35 @@ The database layer wraps the `sqlite3` API with Promise-based helpers:
 - `get()`
 - `all()`
 - `exec()`
+- `withTransaction()`
 
 This allows services to interact with SQLite using async/await.
+
+`withTransaction(callback)` starts a transaction with `BEGIN IMMEDIATE`,
+runs the callback, and `COMMIT`s. If the callback throws, the transaction
+is rolled back and the original error is re-thrown. Because `BEGIN` runs
+outside the try/catch, a failed `BEGIN` does not trigger a spurious
+`ROLLBACK`.
+
+The connection enables `foreign_keys`, `journal_mode = WAL`, and
+`busy_timeout` once at startup. These pragmas are per-connection, so they
+are configured in one place.
+
+## Money Representation
+
+Money is stored and transmitted as integers in the smallest unit of each
+currency (see [`database-design.md`](database-design.md)). Services
+validate that amounts are positive integers. The frontend performs the
+conversion between minor units and display format.
 
 ## Atomic Operations
 
 Transaction creation, updates, deletion, and transfers may modify
 multiple database records.
 
-These operations use:
+Each operation runs inside a single `withTransaction()` call using:
 
-BEGIN TRANSACTION
+BEGIN IMMEDIATE
 COMMIT
 ROLLBACK
 

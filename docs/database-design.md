@@ -19,6 +19,24 @@ Currency
 Category
   └── Transaction
 
+## Money Representation
+
+Money is stored as integers in the smallest unit of each currency.
+
+- `currencies.decimal_places` records how many decimal places a currency uses.
+- USD has `decimal_places = 2`, so `$10.50` is stored as `1050` (cents).
+- VND has `decimal_places = 0`, so `₫70,000` is stored as `70000` (dong).
+
+JavaScript numbers are IEEE-754 doubles, so storing money as a fraction
+risks rounding drift. SQLite's `NUMERIC` is only a type affinity, not an
+exact decimal type, so it does not solve this either. Integers do.
+
+The exchange rate of a transfer is a ratio rather than a money amount, so
+it is stored as an integer in micro units (`rate * 1_000_000`).
+
+The API only accepts and returns integers for money. The browser converts
+between minor units and display format.
+
 ## Transactions
 
 Transactions represent income or expenses.
@@ -48,6 +66,17 @@ A transfer contains:
 
 The exchange rate is stored with the transfer so historical transfers
 retain the rate used when they occurred.
+
+A transfer is either `pending` or `completed`.
+
+- A **pending** transfer records the sent amount and date only. It does
+  not change any account balance.
+- A **completed** transfer has both a received amount and a received
+  date, and it has already moved money between the two accounts.
+
+Completing a pending transfer debits the source account, credits the
+destination account, and marks the transfer as completed in a single
+atomic operation. A transfer can only be completed once.
 
 ## Multiple Currencies
 

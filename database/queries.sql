@@ -9,6 +9,10 @@
 --
 -- Mutation examples in Phases 9–10 are commented out so that
 -- running this entire file does not modify the database.
+--
+-- NOTE: money is now stored as integers in the smallest unit of each
+-- currency (USD cents, VND dong). The literal amounts below predate that
+-- change and are kept for readability, so treat them as illustrative.
 -- ============================================================
 
 

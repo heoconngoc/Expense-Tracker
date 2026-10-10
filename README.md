@@ -12,8 +12,10 @@ The project focuses on relational database design, transactional consistency, RE
 - Organize transactions by category
 - Transfer money between accounts
 - Store exchange rates used for transfers
+- Create pending transfers and complete them later
 - View monthly income, expenses, and net totals
 - Filter dashboard summaries by month and currency
+- Store money as integers in the smallest unit of each currency
 - Archive accounts, categories, and currencies while preserving historical data
 - Maintain account balances with atomic database operations
 - Validate business rules at the service layer
@@ -111,6 +113,13 @@ A transfer records:
 
 The exchange rate is stored with the transfer so the historical rate used for that transfer is preserved.
 
+A transfer has one of two states:
+
+- A **pending** transfer records the sent amount and does not change any balance.
+- A **completed** transfer has moved money between the two accounts.
+
+Completing a pending transfer debits the source account, credits the destination account, and marks the transfer completed atomically. A transfer can only be completed once.
+
 ### Multiple Currencies
 
 Each account has one currency.
@@ -126,6 +135,20 @@ are not financially meaningful without an exchange rate.
 Dashboard calculations therefore operate within a selected currency.
 
 See [`docs/database-design.md`](docs/database-design.md) for more details.
+
+### Money Representation
+
+Money is stored as integers in the smallest unit of each currency.
+
+- `currencies.decimal_places` records a currency's number of decimal places.
+- `$10.50` (USD, 2 decimals) is stored as `1050` cents.
+- `₫70,000` (VND, 0 decimals) is stored as `70000` dong.
+
+JavaScript numbers are IEEE-754 doubles, so using them for money risks rounding drift, and SQLite's `NUMERIC` is only a type affinity, not an exact decimal type. Integers avoid both problems.
+
+The API accepts and returns money only as integers. The browser converts between minor units and display format.
+
+The exchange rate of a transfer is a ratio, not a money amount, so it is stored as an integer in micro units (`rate * 1_000_000`).
 
 ## Data Integrity
 
@@ -188,6 +211,7 @@ Transaction listing also supports filtering.
 | Method | Endpoint | Description |
 | --- | --- | --- |
 | `GET` | `/accounts` | List accounts and balances |
+| `GET` | `/accounts?active=1` | List active accounts only |
 
 ### Categories
 
@@ -195,12 +219,21 @@ Transaction listing also supports filtering.
 | --- | --- | --- |
 | `GET` | `/categories` | List categories |
 
+### Currencies
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| `GET` | `/currencies` | List currencies |
+| `GET` | `/currencies?active=1` | List active currencies only |
+
 ### Transfers
 
 | Method | Endpoint | Description |
 | --- | --- | --- |
 | `GET` | `/transfers` | List transfers |
+| `GET` | `/transfers/:id` | Get one transfer |
 | `POST` | `/transfers` | Create a transfer |
+| `PATCH` | `/transfers/:id` | Complete a pending transfer |
 
 ### Dashboard
 
@@ -219,17 +252,20 @@ Example response:
 ```json
 {
   "currency": "USD",
-  "totalIncome": 1200,
-  "totalExpense": 185.24,
-  "net": 1014.76,
+  "decimalPlaces": 2,
+  "totalIncome": 120000,
+  "totalExpense": 18524,
+  "net": 101476,
   "byCategory": [
     {
       "category": "Food",
-      "total": 70.25
+      "total": 7025
     }
   ]
 }
 ```
+
+All amounts in the response are integers in the smallest unit of the selected currency (cents for USD).
 
 ## Frontend
 
@@ -244,14 +280,21 @@ It supports:
 - Adding transactions
 - Editing transactions
 - Deleting transactions
+- Viewing transfers
+- Creating transfers
+- Completing pending transfers
 
-After a transaction is created, updated, or deleted, the relevant frontend data is refreshed so account balances, transaction history, and dashboard totals remain synchronized.
+Because the API works in minor units, the frontend converts amounts to and from display format using each currency's `decimalPlaces`.
+
+After data changes, the relevant frontend data is refreshed so account balances, transaction history, transfers, and dashboard totals remain synchronized.
 
 ## Project Structure
 
 ```text
 expense-tracker/
 ├── database/
+│   ├── migrations/
+│   │   └── 001_money_to_integer.sql
 │   ├── schema.sql
 │   ├── seed.sql
 │   └── queries.sql
@@ -270,7 +313,19 @@ expense-tracker/
 │   ├── errors/
 │   │   └── AppError.js
 │   ├── routes/
+│   │   ├── accounts.js
+│   │   ├── categories.js
+│   │   ├── currencies.js
+│   │   ├── dashboard.js
+│   │   ├── transactions.js
+│   │   └── transfers.js
 │   ├── services/
+│   │   ├── accountService.js
+│   │   ├── categoryService.js
+│   │   ├── currencyService.js
+│   │   ├── dashboardService.js
+│   │   ├── transactionService.js
+│   │   └── transferService.js
 │   ├── app.js
 │   ├── database.js
 │   └── server.js
@@ -278,6 +333,7 @@ expense-tracker/
 ├── test/
 │   ├── setup.js
 │   ├── api.test.js
+│   ├── database.test.js
 │   ├── transactionService.test.js
 │   └── transferService.test.js
 │
@@ -333,6 +389,16 @@ sqlite3 database/expense.db < database/seed.sql
 ```
 
 The database files themselves are ignored by Git, so each development environment can create its own local database.
+
+### Migrate an Existing Database
+
+If you already have a database created with an older schema, apply the migrations instead of recreating it:
+
+```bash
+sqlite3 database/expense.db < database/migrations/001_money_to_integer.sql
+```
+
+`001_money_to_integer.sql` converts money from decimal base units to integer minor units. SQLite cannot change a column type with `ALTER TABLE`, so the migration recreates the affected tables and copies the data across inside a single transaction.
 
 ### Start the Application
 
@@ -409,6 +475,8 @@ Examples include:
 - Inactive accounts
 - Invalid categories
 - Invalid transfers
+- Insufficient balance
+- Unknown currencies
 
 Unexpected errors are handled by the global Express error middleware and returned as:
 
@@ -443,12 +511,12 @@ Possible future extensions include:
 
 - User authentication
 - Per-user accounts and transactions
-- Database migrations
-- Pending transfer completion workflow
+- Automated database migration runner
 - Historical exchange-rate integration
 - Charts and financial visualizations
 - Pagination
 - More advanced transaction filtering
+- Managing accounts, categories, and currencies through the API
 - Deployment
 - Logging and monitoring
 
