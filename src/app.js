@@ -6,6 +6,7 @@ import accountRoutes from "./routes/accounts.js";
 import categoryRoutes from "./routes/categories.js";
 import currencyRoutes from "./routes/currencies.js";
 import dashboardRoutes from "./routes/dashboard.js";
+import exchangeRateRoutes from "./routes/exchangeRates.js";
 import goldPriceRoutes from "./routes/goldPrices.js";
 import settingsRoutes from "./routes/settings.js";
 
@@ -20,6 +21,7 @@ app.use("/accounts", accountRoutes);
 app.use("/categories", categoryRoutes);
 app.use("/currencies", currencyRoutes);
 app.use("/dashboard", dashboardRoutes);
+app.use("/exchange-rates", exchangeRateRoutes);
 app.use("/gold-prices", goldPriceRoutes);
 app.use("/settings", settingsRoutes);
 
