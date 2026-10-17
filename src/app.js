@@ -10,6 +10,7 @@ import exchangeRateRoutes from "./routes/exchangeRates.js";
 import goldHoldingRoutes from "./routes/goldHoldings.js";
 import goldPriceRoutes from "./routes/goldPrices.js";
 import settingsRoutes from "./routes/settings.js";
+import savingsGoalRoutes from "./routes/savingsGoals.js";
 
 const app = express();
 
@@ -26,6 +27,7 @@ app.use("/exchange-rates", exchangeRateRoutes);
 app.use("/gold-holdings", goldHoldingRoutes);
 app.use("/gold-prices", goldPriceRoutes);
 app.use("/settings", settingsRoutes);
+app.use("/savings-goals", savingsGoalRoutes);
 
 app.use((req, res) => {
   res.status(404).json({
