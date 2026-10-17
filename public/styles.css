@@ -965,6 +965,7 @@ textarea {
 /* ---- Extra responsive ---- */
 
 @media (max-width: 640px) {
+
   .tab {
     padding: 9px 2px;
     font-size: 0.7rem;
@@ -986,5 +987,53 @@ textarea {
   .exchange-row input {
     max-width: none;
   }
+}
+
+/* ---- Toast & chart fallback ---- */
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  z-index: 100;
+
+  max-width: min(420px, calc(100% - 32px));
+  padding: 12px 18px;
+
+  background: var(--ink);
+  color: #fdfcf9;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lift);
+  font-size: 0.9rem;
+
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-50%) translateY(20px);
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.toast.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+@media (max-width: 640px) {
+  .toast {
+    bottom: calc(84px + env(safe-area-inset-bottom));
+  }
+}
+
+.chart-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  height: 100%;
+  padding: 0 12px;
+  margin: 0;
+
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+  text-align: center;
 }
 

@@ -151,6 +151,31 @@ function createEmptyState(title, subtitle = "", buttonText = null) {
   return box;
 }
 
+// ---- Toast ----
+
+const toast = document.createElement("div");
+toast.className = "toast";
+document.body.append(toast);
+
+let toastTimer = null;
+
+function showToast(message) {
+  toast.textContent = message;
+  toast.classList.add("visible");
+
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove("visible"), 4000);
+}
+
+async function safe(task) {
+  try {
+    await task();
+  } catch (err) {
+    console.error(err);
+    showToast(err?.message || "Có lỗi xảy ra khi tải dữ liệu");
+  }
+}
+
 // ---- Tabs ----
 
 function showTab(name) {
@@ -737,23 +762,53 @@ async function loadDashboard() {
 }
 
 async function renderCharts(dashboard) {
+  const trendCanvas = document.querySelector("#trend-chart");
+  const categoryCanvas = document.querySelector("#category-chart");
+
   try {
     await renderTrendChart(
-      document.querySelector("#trend-chart"),
+      trendCanvas,
       dashboard.monthly,
       dashboard.currency,
       dashboard.decimalPlaces
     );
+  } catch (err) {
+    console.error("Failed to render trend chart", err);
+    showChartFallback(
+      trendCanvas,
+      "Không tải được biểu đồ. Cần internet để tải Chart.js."
+    );
+  }
 
+  try {
     await renderCategoryChart(
-      document.querySelector("#category-chart"),
+      categoryCanvas,
       dashboard.byCategory,
       dashboard.currency,
       dashboard.decimalPlaces
     );
   } catch (err) {
-    console.error("Failed to render charts", err);
+    console.error("Failed to render category chart", err);
+    showChartFallback(
+      categoryCanvas,
+      "Không tải được biểu đồ. Cần internet để tải Chart.js."
+    );
   }
+}
+
+function showChartFallback(canvas, message) {
+  const box = canvas.parentElement;
+
+  if (!box || box.querySelector(".chart-fallback")) {
+    return;
+  }
+
+  const note = document.createElement("p");
+  note.className = "chart-fallback";
+  note.textContent = message;
+
+  canvas.hidden = true;
+  box.append(note);
 }
 
 function refreshDashboard() {
@@ -2333,20 +2388,20 @@ document.querySelector("#transaction-filter-type").addEventListener("change", lo
 
 async function refreshAll() {
   await Promise.all([
-    loadCurrencies(),
-    loadAccounts(),
-    loadAccountOptions(),
-    loadCategories(),
-    loadTransactions(),
-    loadDashboard(),
-    loadAccountTransactions(),
-    loadTransfers(),
-    loadManageAccounts(),
-    loadManageCategories(),
-    loadManageCurrencies(),
-    loadAssetsTab(),
-    loadGoals(),
-    loadSuggestions(),
+    safe(loadCurrencies),
+    safe(loadAccounts),
+    safe(loadAccountOptions),
+    safe(loadCategories),
+    safe(loadTransactions),
+    safe(loadDashboard),
+    safe(loadAccountTransactions),
+    safe(loadTransfers),
+    safe(loadManageAccounts),
+    safe(loadManageCategories),
+    safe(loadManageCurrencies),
+    safe(loadAssetsTab),
+    safe(loadGoals),
+    safe(loadSuggestions),
   ]);
 }
 
@@ -2359,22 +2414,23 @@ async function initialize() {
     await loadCurrencies();
 
     await Promise.all([
-      loadAccounts(),
-      loadAccountOptions(),
-      loadCategories(),
-      loadTransactions(),
-      loadDashboard(),
-      loadAccountTransactions(),
-      loadTransfers(),
-      loadManageAccounts(),
-      loadManageCategories(),
-      loadManageCurrencies(),
-      loadAssetsTab(),
-      loadGoals(),
-      loadSuggestions(),
+      safe(loadAccounts),
+      safe(loadAccountOptions),
+      safe(loadCategories),
+      safe(loadTransactions),
+      safe(loadDashboard),
+      safe(loadAccountTransactions),
+      safe(loadTransfers),
+      safe(loadManageAccounts),
+      safe(loadManageCategories),
+      safe(loadManageCurrencies),
+      safe(loadAssetsTab),
+      safe(loadGoals),
+      safe(loadSuggestions),
     ]);
   } catch (err) {
     console.error(err);
+    showToast("Không khởi động được ứng dụng");
   }
 }
 
