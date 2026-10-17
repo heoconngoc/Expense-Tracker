@@ -837,3 +837,59 @@ Và chạy server với **DB_PATH tạm** (`/tmp/smoke.db`) để không đụng
 3. Làm sao bọc restore để lỗi giữa đường không làm hỏng dữ liệu?
 4. Vì sao phải `pkill` server cũ trước khi smoke test?
 
+## Phase 4 — Hardening & test
+
+### 4.1 Coverage không nên là gate toàn cục cho `npm test`
+
+Jest `coverageThreshold` chỉ được kiểm tra khi có cờ `--coverage`. Nếu nhét
+threshold vào cấu hình mà `npm test` không bật coverage, threshold vô tác dụng
+và gây ảo giác "đã có gate". Cách làm sạch: giữ `npm test` nhanh (không coverage)
+để chạy liên tục, tách `npm run test:coverage` bật `--coverage` + threshold. Như
+vậy dev loop vẫn nhẹ, còn gate chạy khi kết thúc phase / trước PR.
+
+### 4.2 Đo coverage trước khi viết test, đừng đoán
+
+Baseline cho thấy `transactionService` ~60% và `transferService` ~75% — thấp hơn
+hẳn phần còn lại. Nhìn vào `Uncovered Line #s` trong báo cáo để biết chính xác
+thiếu nhánh nào (validation, filter, nhánh `not found`), thay vì viết test tràn
+lan. Chỉ cần phủ đúng các nhánh đó là service lên 100%.
+
+### 4.3 Lỗi frontend phải nhìn thấy được, đừng `catch` rồi im
+
+Code cũ `catch (err) { console.error(err); }` làm chart/CDN chết trong im lặng —
+người dùng chỉ thấy khung trống và tưởng app hỏng. Fix: 1 toast dùng chung
+(`showToast`) + helper `safe(task)` bọc mọi loader, và fallback hiển thị chữ
+trong chính chỗ canvas. Nguyên tắc: **lỗi tải dữ liệu luôn có phản hồi thị
+giác**, không chỉ log console.
+
+### 4.4 Fallback cho tài nguyên ngoài (CDN)
+
+Chart.js tải qua CDN có thể fail (offline, chặn mạng). Phải bọc riêng từng chart
+trong `try/catch` để 1 chart lỗi không kéo đổ chart kia, và thay canvas bằng
+`.chart-fallback` có thông báo. Không để `await` CDN làm sập cả `renderCharts`.
+
+### 4.5 Bug do tiến trình server cũ (nhắc lại lần 2)
+
+User báo "chưa thấy chart" dù code đã có. Nguyên nhân hàng đầu vẫn là **tiến
+trình `node` cũ giữ cổng** phục vụ bundle cũ, hoặc **cache trình duyệt**. Trước
+khi sửa code, luôn xác minh server đang phục vụ bản mới (`curl /app.js` xem có
+hàm mới không) và yêu cầu hard refresh. Tránh sửa code khi lỗi chỉ là môi trường.
+
+### Điểm dừng Phase 4
+
+- [x] Toast lỗi tiếng Việt dùng chung (`showToast`) + helper `safe(task)`
+- [x] Fallback chart khi CDN lỗi (`.chart-fallback`, bọc riêng từng chart)
+- [x] `npm run test:coverage` + threshold 80/70/80/80 trong `package.json`
+- [x] Edge-case tests: validation giao dịch, filter, update/delete 404, chuyển
+      khoản (thiếu tài khoản, tỷ giá ≤ 0, status lạ, thiếu ngày/số nhận, số dư
+      không đủ khi hoàn tất), `getTransfers`/`getTransferById`
+- [x] 143 test xanh; all files 93.29% stmts / 81.26% branch / 100% funcs / 93.24% lines
+- [x] `docs/QA-CHECKLIST.md` cho kiểm tra tay mobile + desktop
+
+**Tự kiểm tra hiểu bài**:
+1. Vì sao `coverageThreshold` không chặn `npm test` mà chỉ chặn `test:coverage`?
+2. Nhìn cột `Uncovered Line #s` để chọn test nhanh hơn "đoán mù" như thế nào?
+3. Vì sao bọc riêng từng chart trong `try/catch` thay vì bọc chung `renderCharts`?
+4. Khi user báo UI không đổi, vì sao phải kiểm tra tiến trình server + cache
+   trước khi sửa code?
+

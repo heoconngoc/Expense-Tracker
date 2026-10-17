@@ -206,11 +206,25 @@ mobile+desktop.
 
 ### Phase 4 — Hardening & test (xen kẽ các phase khác)
 
-- [ ] Coverage business logic ≥ 80% (services, không tính routes thin wrapper)
-- [ ] Test edge cases: tỷ giá = 0, giá vàng API timeout, goal đạt 100%,
+- [x] Coverage business logic ≥ 80% (services, không tính routes thin wrapper)
+- [x] Test edge cases: tỷ giá = 0, giá vàng API timeout, goal đạt 100%,
   giao dịch âm, chuyển khoản đa tiền tệ
-- [ ] UI test checklist tay mỗi khi đổi UI (lưu trong `docs/QA-CHECKLIST.md`)
-- [ ] Error handling nhất quán: mọi fetch frontend đều có catch + toast lỗi tiếng Việt
+- [x] UI test checklist tay mỗi khi đổi UI (lưu trong `docs/QA-CHECKLIST.md`)
+- [x] Error handling nhất quán: mọi fetch frontend đều có catch + toast lỗi tiếng Việt
+
+**Ghi chú lệch kế hoạch (đã chốt khi làm)**:
+- Thêm script `npm run test:coverage` + cấu hình `jest.coverageThreshold` trong
+  `package.json` (global 80/70/80/80). `npm test` giữ nguyên, không gate coverage
+  — threshold chỉ áp khi chạy `test:coverage`.
+- Toast lỗi dùng 1 element tạo động trong `app.js` (không phải mỗi fetch tự tạo);
+  helper `safe(task)` bọc mọi loader trong `refreshAll`/`initialize`.
+- Biểu đồ có fallback: nếu tải Chart.js (CDN) thất bại, canvas đổi thành
+  `.chart-fallback` kèm thông báo tiếng Việt thay vì im lặng.
+
+**Điều kiện hoàn thành**: ✅ `npm run test:coverage` xanh — 143 test, all files
+93.29% stmts / 81.26% branch / 100% funcs / 93.24% lines; transactionService &
+transferService đạt 100%. Checklist tay trong `docs/QA-CHECKLIST.md` chờ user
+chạy mobile+desktop.
 
 ### Phase 5 — Deploy Azure VM B1S + CD
 
@@ -272,8 +286,9 @@ push code → 2 phút sau app tự cập nhật, DB sống qua redeploy (có bac
 5. **Không test thứ không đáng test**: không snapshot HTML, không test library
    bên thứ ba (Chart.js), không test getter/setter rỗng.
 6. **Mock fetch** cho module vàng/tỷ giá — test không phụ thuộc mạng.
-7. **Coverage mục tiêu**: ≥80% lines cho `src/services/`. Không chạy coverage
-   làm gate v1 (coi là chỉ dẫn, không chặn).
+7. **Coverage mục tiêu**: ≥80% lines cho `src/services/`. `npm test` không gate
+   coverage; `npm run test:coverage` áp `jest.coverageThreshold` (80/70/80/80)
+   — chạy trước khi kết thúc phase.
 
 ## 8. Definition of Done (mỗi phase)
 
