@@ -745,3 +745,246 @@ textarea {
     min-height: 44px;
   }
 }
+
+/* ---- Hero card & asset breakdown ---- */
+
+.hero-card {
+  border-top: 3px solid var(--ochre);
+}
+
+.hero-value {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 2.4rem;
+  font-weight: 600;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums lining-nums;
+  color: var(--ink);
+}
+
+.asset-breakdown {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--paper-2);
+
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+.chip strong {
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.chip.spending {
+  background: var(--moss-soft);
+  border-color: var(--moss-border);
+}
+
+.chip.savings {
+  background: var(--leaf-soft);
+  border-color: var(--leaf-border);
+}
+
+.chip.gold {
+  background: var(--ochre-soft);
+  border-color: var(--ochre-border);
+}
+
+/* ---- Charts ---- */
+
+.charts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.chart-card h3 {
+  margin-bottom: 16px;
+  font-size: 1rem;
+}
+
+.chart-box {
+  position: relative;
+  height: 240px;
+}
+
+/* ---- Gold price ---- */
+
+.gold-price-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.gold-price-card strong {
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.gold-price-card .muted {
+  margin-top: 4px;
+}
+
+.gold-price-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* ---- Asset / goal / exchange lists ---- */
+
+#gold-holdings,
+#exchange-rates,
+#asset-accounts {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+#goals {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+.holding-quantity {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.exchange-row input {
+  max-width: 170px;
+  text-align: right;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+/* ---- Savings goals ---- */
+
+.goal-card {
+  padding: 20px 22px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-soft);
+}
+
+.goal-card.archived {
+  opacity: 0.65;
+}
+
+.goal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.goal-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.goal-subtitle {
+  margin: 4px 0 0;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}
+
+.goal-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.goal-progress {
+  height: 10px;
+  margin: 14px 0 8px;
+
+  background: var(--paper-2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.goal-progress-bar {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--leaf);
+}
+
+.goal-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.goal-contributions {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--line);
+}
+
+.goal-contribution {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 0;
+
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+/* ---- Extra responsive ---- */
+
+@media (max-width: 640px) {
+  .tab {
+    padding: 9px 2px;
+    font-size: 0.7rem;
+  }
+
+  .charts-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .gold-price-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .gold-price-actions {
+    justify-content: flex-end;
+  }
+
+  .exchange-row input {
+    max-width: none;
+  }
+}
+
