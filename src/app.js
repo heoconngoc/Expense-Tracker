@@ -12,10 +12,11 @@ import goldHoldingRoutes from "./routes/goldHoldings.js";
 import goldPriceRoutes from "./routes/goldPrices.js";
 import settingsRoutes from "./routes/settings.js";
 import savingsGoalRoutes from "./routes/savingsGoals.js";
+import backupRoutes from "./routes/backup.js";
 
 const app = express();
 
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
 app.use(express.static("public"));
 
 app.use("/transactions", transactionRoutes);
@@ -30,6 +31,7 @@ app.use("/gold-holdings", goldHoldingRoutes);
 app.use("/gold-prices", goldPriceRoutes);
 app.use("/settings", settingsRoutes);
 app.use("/savings-goals", savingsGoalRoutes);
+app.use("/backup", backupRoutes);
 
 app.use((req, res) => {
   res.status(404).json({
