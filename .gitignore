@@ -6,4 +6,4 @@ node_modules/
 *.sqlite
 *.sqlite3
 .DS_Store
-LESSONS.md
+/LESSONS.md
