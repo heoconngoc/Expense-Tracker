@@ -173,22 +173,36 @@ behavior (test cũ không sửa, trừ khi cần thêm field). ✅ 112 test xanh
 
 **Mục tiêu**: 2 tab mới + dashboard biểu đồ, hoạt động thật trên dữ liệu thật.
 
-- [ ] Module `public/js/` tách theo tab (bắt đầu tái cấu trúc app.js khi chạm tới)
-- [ ] Tab **Tổng quan** mới:
-  - Hero card: Tổng tài sản (số to), breakdown tiền vs vàng
-  - Chart.js bar: chi tiêu 6 tháng gần nhất
-  - Chart.js donut: chi tiêu theo danh mục tháng này
-- [ ] Tab **Tài sản**: danh sách account theo nhóm 3 loại, form CRUD gold_holdings,
-  giá vàng hiện tại + thời điểm cập nhật, nhập tay khi API lỗi
-- [ ] Tab **Mục tiêu tiết kiệm**: danh sách goal + bar tiến độ, form tạo goal,
-  form đóng góp nhanh
-- [ ] Tab **Giao dịch**: datalist gợi ý danh mục/tài khoản (lấy top dùng nhiều)
-- [ ] Module vàng frontend: fetch `/api/gold-prices/current`, fallback form nhập
-- [ ] Xuất/nhập JSON trong tab Quản lý (backup/restore toàn bộ)
-- [ ] Chart.js qua CDN, lazy-load chỉ khi mở tab có biểu đồ
+- [x] Tách bạch đầu tiên: `public/js/charts.js` là ES module riêng, `app.js` import
+  (Chart.js lazy-load chỉ khi vẽ biểu đồ). Chưa tách hết mọi tab thành module —
+  làm dần khi chạm, ưu tiên tính năng chạy đúng.
+- [x] Tab **Tổng quan** mới:
+  - Hero card: Tổng tài sản (số to), breakdown chi tiêu / tiết kiệm / vàng
+  - Chart.js bar: chi tiêu 6 tháng gần nhất (`monthly`)
+  - Chart.js donut: chi tiêu theo danh mục tháng này (`byCategory`)
+- [x] Tab **Tài sản**: danh sách account nhóm 3 loại (kèm giá trị VND), form CRUD
+  gold_holdings, giá vàng hiện tại + thời điểm cập nhật, nhập tay khi API lỗi,
+  bảng tỷ giá sửa trực tiếp + nút cập nhật internet
+- [x] Tab **Mục tiêu tiết kiệm**: danh sách goal + bar tiến độ, form tạo/sửa goal,
+  form đóng góp nhanh + danh sách đóng góp (xóa được)
+- [x] Tab **Giao dịch**: datalist gợi ý tên giao dịch (gộp từ lịch sử, sắp xếp)
+- [x] Module vàng frontend: fetch `/gold-prices/current`, fallback form nhập tay
+- [x] Xuất/nhập JSON trong tab Quản lý (backup/restore toàn bộ) — thêm backend
+  `GET /backup` + `POST /backup` (ghi trong transaction, rollback nếu lỗi)
+- [x] Chart.js qua CDN, lazy-load chỉ khi mở tab có biểu đồ
+- [x] Account dialog có thêm trường **Loại tài khoản** (chi tiêu/tiết kiệm/vàng)
+
+**Ghi chú lệch kế hoạch (đã chốt khi làm)**:
+- Dùng `/gold-prices/current` (không prefix `/api`) cho đồng bộ code cũ.
+- Dịp module hóa đầu tiên: tách `charts.js`; các phần khác vẫn trong `app.js`.
+- JSON restore là thao tác nguy hiểm (ghi đè) → có confirm ở frontend; backend
+  xoá + chèn lại trong 1 transaction, an toàn foreign key.
+- Giới hạn body `express.json` nâng lên 10mb để nhập file backup lớn.
 
 **Điều kiện hoàn thành**: nhập dữ liệu thật → thấy biểu đồ, tổng tài sản, tiến độ
-mục tiêu cập nhật. Checklist tay mobile+desktop.
+mục tiêu cập nhật. ✅ Đã smoke test server thật: /assets ra 1.5 lượng vàng =
+210.9tr VND, backup export→xoá→import khôi phục đúng. Cần user checklist tay
+mobile+desktop.
 
 ### Phase 4 — Hardening & test (xen kẽ các phase khác)
 

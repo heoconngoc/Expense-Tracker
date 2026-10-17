@@ -739,3 +739,101 @@ Sau Phase 2, backend có:
 3. Số lượng vàng 0.5 chỉ được lưu trong database như thế nào?
 4. Làm sao test một hàm gọi API mạng mà không cần mạng?
 
+---
+
+## Phase 3 — bài học frontend & backup
+
+### 3.1 Lazy-load Chart.js bằng `import()` động
+
+Chart.js nặng, không phải lúc nào cũng cần. Thay vì `<script>` ở `<head>`, ta để
+`public/js/charts.js` tự tải khi vẽ biểu đồ lần đầu:
+
+```js
+const CHART_JS_URL = "https://cdn.jsdelivr.net/npm/chart.js@4.4.1/+esm";
+let chartJsPromise = null;
+
+function loadChartJs() {
+  chartJsPromise ??= import(CHART_JS_URL).then((m) => m.Chart ?? m.default);
+  return chartJsPromise;
+}
+```
+
+- `import(url)` trả về ES module; jsdelivr `/+esm` phục vụ đúng định dạng.
+- Gán `chartJsPromise` vào biến để **chỉ tải 1 lần** dù gọi nhiều lần.
+
+**Bẫy**: Chart.js ném lỗi nếu vẽ vào `<canvas>` đã có chart cũ. Phải hủy trước:
+
+```js
+const existing = Chart.getChart(canvas);
+if (existing) existing.destroy();
+```
+
+Vì vậy `loadDashboard` chạy lại mỗi khi đổi tháng/tiền tệ cũng không bị chồng chart.
+
+### 3.2 Restore JSON: xóa con trước, chèn cha trước
+
+Bật `PRAGMA foreign_keys = ON` thì thứ tự thao tác bảng rất quan trọng:
+
+- **Xóa**: ngược thứ tự phụ thuộc (bảng con trước) — `savings_contributions` →
+  `savings_goals`, `transactions` → `accounts`, ... cuối cùng `currencies`.
+- **Chèn**: xuôi thứ tự (bảng cha trước) — `currencies` → `categories` → `accounts`
+  → `transactions` → ...
+
+Làm sai thứ tự là `SQLITE_CONSTRAINT: FOREIGN KEY constraint failed` ngay. Đây
+cũng là **bẫy khi viết test**: gọi `DELETE FROM accounts` khi còn `transactions`
+trỏ tới sẽ lỗi, dù ta "chỉ định xóa account". Test phải xóa con trước:
+
+```js
+await run("DELETE FROM transfers");
+await run("DELETE FROM transactions");
+await run("DELETE FROM accounts");
+```
+
+Bọc toàn bộ restore trong một transaction để **lỗi giữa đường thì rollback**,
+không để database ở trạng thái nửa vời. Test "row sai → rollback" kiểm chứng việc
+này bằng cách chèn 1 dòng trùng khóa chính rồi kỳ vọng dữ liệu cũ còn nguyên.
+
+### 3.3 Kiểm tra frontend không cần trình duyệt
+
+Không xem được ảnh/nên mở browser, nhưng vẫn bắt được lỗi tĩnh:
+
+- `node --check public/app.js` — bắt lỗi cú pháp ES module.
+- Đối chiếu mọi `querySelector("#id")` trong JS với `id="..."` trong HTML — phát
+  hiện id gõ sai (đã bắt được `#cancel-gold-price` thiếu trong HTML).
+- Đối chiếu class gán động trong JS với class định nghĩa trong CSS.
+- Đếm cân bằng thẻ HTML (`<div>`/`</div>`, `<dialog>`...) và ngoặc nhọn CSS.
+- Kiểm tra `data-tab` khớp `id="tab-..."`.
+
+Các script nhỏ này thay cho việc mở trình duyệt và chạy nhanh hơn nhiều.
+
+### 3.4 Bẫy tiến trình server cũ chiếm cổng
+
+Khi smoke test, một tiến trình `node src/server.js` cũ vẫn giữ cổng và **phục vụ
+code cũ** (chưa có route `/backup`) → request mới trả 404 "Route not found" dù code
+đã đúng. Dấu hiệu: log server in "Server running" nhưng hành vi như code cũ.
+
+Cách xử lý: dọn sạch trước khi test —
+
+```bash
+pkill -f "node src/server.js"
+lsof -nP -iTCP:4010 -sTCP:LISTEN   # xác nhận cổng trống
+```
+
+Và chạy server với **DB_PATH tạm** (`/tmp/smoke.db`) để không đụng dữ liệu thật.
+
+### Điểm dừng Phase 3
+
+- [x] 6 tab: Tổng quan, Giao dịch, Chuyển khoản, Tài sản, Mục tiêu, Quản lý
+- [x] Tổng quan: hero tổng tài sản + bar 6 tháng + donut theo danh mục
+- [x] Tài sản: nhóm theo loại, CRUD vàng, giá vàng + nhập tay, bảng tỷ giá sửa được
+- [x] Mục tiêu: tiến độ, CRUD goal, đóng góp (thêm/xóa)
+- [x] Gợi ý tên giao dịch bằng datalist
+- [x] Xuất/nhập JSON: `GET /backup` + `POST /backup` (transaction, FK-safe)
+- [x] 118 test xanh (thêm 6 test backup roundtrip/rollback)
+
+**Tự kiểm tra hiểu bài**:
+1. Vì sao phải gọi `chart.destroy()` trước khi vẽ lại chart mới trên cùng canvas?
+2. Khi restore, vì sao xóa bảng con trước bảng cha? Ngược lại thì lỗi gì?
+3. Làm sao bọc restore để lỗi giữa đường không làm hỏng dữ liệu?
+4. Vì sao phải `pkill` server cũ trước khi smoke test?
+
