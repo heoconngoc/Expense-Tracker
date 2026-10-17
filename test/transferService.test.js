@@ -9,6 +9,8 @@ import { get, run } from "../src/database.js";
 import {
   createTransfer,
   completeTransfer,
+  getTransfers,
+  getTransferById,
 } from "../src/services/transferService.js";
 import { resetDatabase } from "./setup.js";
 
@@ -299,5 +301,123 @@ describe("database transactions", () => {
 
     expect(after.balance).toBe(before.balance);
     expect(invalidTransaction).toBeUndefined();
+  });
+});
+
+describe("createTransfer edge cases", () => {
+  const base = {
+    sourceAccountId: 1,
+    destinationAccountId: 2,
+    sentAmount: 50,
+    receivedAmount: 50,
+    exchangeRate: 1,
+    sentDate: "2026-10-07",
+    receivedDate: "2026-10-07",
+  };
+
+  test("rejects a missing destination account", async () => {
+    await expect(
+      createTransfer({ ...base, destinationAccountId: 999999 })
+    ).rejects.toThrow(
+      "Destination account not found or inactive"
+    );
+  });
+
+  test("rejects a non-positive exchange rate", async () => {
+    await expect(
+      createTransfer({ ...base, exchangeRate: 0 })
+    ).rejects.toThrow("exchangeRate must be a positive number");
+  });
+
+  test("rejects an unknown status", async () => {
+    await expect(
+      createTransfer({ ...base, status: "draft" })
+    ).rejects.toThrow("Status must be pending or completed");
+  });
+
+  test("rejects a completed transfer without received amount", async () => {
+    await expect(
+      createTransfer({ ...base, receivedAmount: 0 })
+    ).rejects.toThrow(
+      "receivedAmount must be a positive integer"
+    );
+  });
+
+  test("rejects a completed transfer without received date", async () => {
+    await expect(
+      createTransfer({ ...base, receivedDate: null })
+    ).rejects.toThrow(
+      "receivedDate is required for a completed transfer"
+    );
+  });
+
+  test("rejects a transfer without sent date", async () => {
+    await expect(
+      createTransfer({ ...base, sentDate: "" })
+    ).rejects.toThrow("sentDate is required");
+  });
+});
+
+describe("completeTransfer edge cases", () => {
+  test("rejects a missing received date", async () => {
+    const created = await createTransfer({
+      sourceAccountId: 1,
+      destinationAccountId: 2,
+      sentAmount: 1000,
+      exchangeRate: 1,
+      status: "pending",
+      sentDate: "2026-10-07",
+    });
+
+    await expect(
+      completeTransfer(created.id, { receivedAmount: 1000 })
+    ).rejects.toThrow("receivedDate is required");
+  });
+
+  test("rejects completion when the source no longer has enough", async () => {
+    const created = await createTransfer({
+      sourceAccountId: 1,
+      destinationAccountId: 2,
+      sentAmount: 5000,
+      exchangeRate: 1,
+      status: "pending",
+      sentDate: "2026-10-07",
+    });
+
+    await run(
+      "UPDATE accounts SET balance = ? WHERE id = ?",
+      [10, 1]
+    );
+
+    await expect(
+      completeTransfer(created.id, {
+        receivedAmount: 5000,
+        receivedDate: "2026-10-08",
+      })
+    ).rejects.toThrow("Insufficient balance");
+  });
+});
+
+describe("getTransfers", () => {
+  test("returns all transfers and exposes a decimal exchange rate", async () => {
+    const transfers = await getTransfers();
+
+    expect(transfers.length).toBeGreaterThan(0);
+    expect(typeof transfers[0].exchangeRate).toBe("number");
+  });
+
+  test("filters by status", async () => {
+    const pending = await getTransfers({ status: "pending" });
+
+    expect(pending.length).toBeGreaterThan(0);
+    expect(pending.every((item) => item.status === "pending")).toBe(true);
+  });
+
+  test("reads a single transfer with currency metadata", async () => {
+    const all = await getTransfers();
+    const transfer = await getTransferById(all[0].id);
+
+    expect(transfer.sourceCurrency).toBeTruthy();
+    expect(transfer.destinationCurrency).toBeTruthy();
   });
 });
