@@ -127,10 +127,10 @@ quyết định sau khi dùng thực tế.
 
 **Mục tiêu**: thay skin toàn app, chưa thêm tính năng mới.
 
-- [ ] Tokens CSS mới trong `public/styles.css` (mục 4.1), xóa bộ indigo
-- [ ] Đổi font: Google Fonts link trong `index.html` + fallback
-- [ ] Restyle: header, tab, card, button, form, dialog, table, badge theo 4.2
-- [ ] Responsive: bottom nav mobile, breakpoints 640/1024
+- [x] Tokens CSS mới trong `public/styles.css` (mục 4.1), xóa bộ indigo
+- [x] Đổi font: Google Fonts link trong `index.html` + fallback
+- [x] Restyle: header, tab, card, button, form, dialog, table, badge theo 4.2
+- [x] Responsive: bottom nav mobile, breakpoints 640/1024
 - [ ] Checklist tay: mobile 375px, desktop 1440px, dark? (không làm dark mode v1)
 
 **Điều kiện hoàn thành**: toàn bộ tab cũ (Tổng quan/Giao dịch/Chuyển khoản/Quản lý)

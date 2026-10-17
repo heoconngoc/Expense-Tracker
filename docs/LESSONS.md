@@ -12,6 +12,12 @@
   - [Bài 0.3 — Commit message nên viết thế nào](#bài-03--commit-message-nên-viết-thế-nào)
   - [Bài 0.4 — File `.gitignore` và những thứ không bao giờ commit](#bài-04--file-gitignore-và-những-thứ-không-bao-giờ-commit)
 
+- [Phase 1 — Design system](#phase-1--design-system)
+  - [Bài 1.1 — Design tokens: đặt tên cho màu sắc](#bài-11--design-tokens-đặt-tên-cho-màu-sắc)
+  - [Bài 1.2 — Font pairing: vì sao số tiền dùng font khác chữ thường](#bài-12--font-pairing-vì-sao-số-tiền-dùng-font-khác-chữ-thường)
+  - [Bài 1.3 — Mobile-first responsive: một layout, nhiều kích thước](#bài-13--mobile-first-responsive-một-layout-nhiều-kích-thước)
+  - [Bài 1.4 — Vì sao phải giữ nguyên tên class khi đổi giao diện](#bài-14--vì-sao-phải-giữ-nguyên-tên-class-khi-đổi-giao-diện)
+
 ---
 
 # Phase 0 — Nền móng
@@ -269,3 +275,223 @@ lập trình) nghe:
 3. Branch `develop` dùng để làm gì?
 
 Nếu trả lời trôi chảy, bạn đã sẵn sàng cho Phase 1.
+
+---
+
+# Phase 1 — Design system
+
+## Bài 1.1 — Design tokens: đặt tên cho màu sắc
+
+### Vấn đề nếu không có tokens
+
+Giả sử bạn tô nút bấm màu xanh bằng mã `#3d5a4c`. Rồi 20 chỗ khác trong file
+cũng gõ `#3d5a4c`. Sau này bạn muốn đổi xanh đậm hơn một chút — bạn phải tìm
+và sửa 20 chỗ. Lỡ quên 1 chỗ, giao diện lệch màu ngay. Đau mắt.
+
+### Giải pháp: đặt tên cho màu
+
+Thay vì gõ mã màu ở khắp nơi, ta gõ **một lần duy nhất** ở đầu file:
+
+```css
+:root {
+  --moss: #3d5a4c;
+  --paper: #faf6ef;
+}
+```
+
+Rồi mọi nơi khác dùng **tên** chứ không dùng mã:
+
+```css
+.button { background: var(--moss); }
+.eyebrow { color: var(--ochre); }
+body { background: var(--paper); }
+```
+
+`--moss` gọi là một **biến CSS** (CSS variable), hay còn gọi là **design token**
+— "token" nghĩa là một đơn vị thiết kế được đặt tên. Đổi màu chỉ cần sửa **một
+dòng** ở `:root`, cả app tự cập nhật.
+
+### `:root` là gì?
+
+`:root` là phần tử gốc của cả trang (thẻ `<html>`). Biến khai báo trong `:root`
+có mặt ở **mọi nơi** trong site. Giống như bạn viết bảng màu lên góc bảng đen
+của lớp — ai cũng đọc được và dùng chung.
+
+> **Ứng dụng trong app này**: file `styles.css` mở đầu bằng khối `:root` chứa
+> toàn bộ bảng màu "sổ tay" (giấy, mực, xanh rêu, đất nung, vàng đất...).
+> Không chỗ nào trong app còn viết mã màu trực tiếp nữa — tất cả đi qua token.
+
+---
+
+## Bài 1.2 — Font pairing: vì sao số tiền dùng font khác chữ thường
+
+### Hai loại chữ trong thiết kế
+
+- **Serif** (chữ "có chân"): như `Times New Roman`, `Georgia`. Cảm giác trang
+  trọng, cổ điển, giống sách in.
+- **Sans-serif** (chữ "không chân"): như `Arial`, `Inter`. Sạch, hiện đại, dễ
+  đọc trên màn hình.
+
+### Tại sao phối hợp cả hai?
+
+Nếu dùng **một** font cho tất cả, trang trông đơn điệu — đúng kiểu "UI mặc định".
+Trong sổ tài chính thật, người ta thường viết:
+
+- Số tiền bằng nét **đậm, trang trọng** → đây là **ngôi sao** của trang.
+- Chữ giải thích bằng nét **gọn, dễ đọc** → chỉ là phụ trợ.
+
+Nên app này dùng:
+- `Fraunces` (serif) cho **số tiền, tiêu đề** → trang trọng, "có hồn".
+- `Inter` (sans-serif) cho **chữ nội dung** → dễ đọc.
+
+### Giữ tiêu đề phòng khi font không tải được
+
+Google Fonts có thể chậm hoặc không tải (mạng yếu, ngoài quê). Nên **luôn** khai
+báo font dự phòng, viết sau dấu phẩy:
+
+```css
+--font-display: "Fraunces", Georgia, "Times New Roman", serif;
+```
+
+Đọc là: "Ưu tiên Fraunces. Không có thì dùng Georgia. Không có nữa thì Times.
+Cuối cùng thì để trình duyệt tự chọn font serif." Trình duyệt thử từng cái từ
+trái sang phải. Gọi là **font stack**.
+
+### `tabular-nums` — chi tiết nhỏ, khác biệt lớn
+
+Số trong font bình thường có thể có độ rộng khác nhau (số `1` hẹp hơn số `8`).
+Với số tiền xếp cột, điều đó làm cột số **so le**, xấu. `tabular-nums` buộc mọi
+chữ số có cùng độ rộng — số thẳng cột như trong Excel:
+
+```css
+.card strong {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+```
+
+Đây là một trong những chi tiết nhỏ tách "UI nghiệp dư" khỏi "UI chăm chút".
+
+---
+
+## Bài 1.3 — Mobile-first responsive: một layout, nhiều kích thước
+
+### Responsive là gì?
+
+Cùng một trang web nhưng **tự co giãn** cho vừa màn hình điện thoại, máy tính
+bảng, và desktop. Không phải làm 3 app riêng — làm 1, cho nó "mềm dẻo".
+
+### `@media` — "nếu màn hình như thế này thì..."
+
+CSS có công cụ gọi là **media query**. Đọc như câu điều kiện:
+
+```css
+@media (max-width: 640px) {
+  .nav-tabs { position: fixed; bottom: 0; }
+}
+```
+
+Nghĩa là: "Nếu màn hình **nhỏ hơn hoặc bằng 640px** (điện thoại), thì thanh điều
+hướng dính xuống **đáy màn hình**."
+
+Ở desktop, thanh tab nằm trên đầu như bình thường (kiểu web). Trên điện thoại,
+nó chuyển thành **thanh dưới cùng** — đúng kiểu app mobile người ta quen dùng
+ngón cái với tới.
+
+### Tại sao "mobile-first"?
+
+Trong app này, các quy tắc chung viết trước, rồi `@media` chỉ **ghi đè** cho
+màn nhỏ. Cách này gọi là **mobile-first** — bắt đầu từ cái khó nhất (màn nhỏ),
+rồi mở rộng ra. Ưu điểm: app dùng được ngay trên điện thoại, nơi bạn hay ghi
+chép chi tiêu nhất.
+
+### Các breakpoint đã dùng
+
+| Kích thước | Đối tượng | Thay đổi |
+|---|---|---|
+| `> 1024px` | Desktop | Dashboard 3 cột, container rộng 1160px |
+| `641px – 1024px` | Tablet | Summary grid 2 cột |
+| `≤ 640px` | Điện thoại | Thanh tab xuống đáy, 1 cột, nút cao ≥44px |
+
+### `env(safe-area-inset-bottom)` là gì?
+
+iPhone có "tai thỏ" và thanh gạt dưới đáy màn hình. Nếu đặt nút ở sát đáy, thanh
+gạt che mất. Dòng này tự cộng thêm một khoảng đệm an toàn:
+
+```css
+padding-bottom: calc(6px + env(safe-area-inset-bottom));
+```
+
+`env()` là hàm đọc "vùng an toàn" của thiết bị. Trên máy Android thường nó bằng
+0, không ảnh hưởng gì.
+
+---
+
+## Bài 1.4 — Vì sao phải giữ nguyên tên class khi đổi giao diện
+
+### HTML, CSS, JS nói chuyện với nhau thế nào?
+
+Ba "người bạn" trong app này:
+
+- **HTML** dựng khung xương (nút, ô nhập, thẻ).
+- **CSS** sơn màu, trang trí (qua **class** — ví dụ `.button`, `.card`).
+- **JavaScript** (`app.js`) tạo thêm phần tử động — cũng **gán class** cho chúng.
+
+Ví dụ trong `app.js`, khi tạo một thẻ giao dịch, nó viết:
+
+```js
+row.className = "transaction-row";
+badge.className = "badge badge-archived";
+```
+
+JS **không biết** `.transaction-row` được sơn màu gì. Nó chỉ gắn cái **nhãn**
+tên class đó. CSS đọc nhãn để tô màu.
+
+### Chuyện gì xảy ra nếu đổi tên class?
+
+Nếu trong CSS ta đổi `.transaction-row` thành `.txn-row`, mà trong `app.js` vẫn
+gắn nhãn `transaction-row` — thì **CSS không tìm thấy nhãn nào trùng**, thẻ đó
+mất hết màu sắc và bố cục. Thậm chí cả nút bấm cũng mất dáng.
+
+Đây là lỗi cực kỳ phổ biến khi "đổi giao diện": đổi màu thì dễ, nhưng vô tình
+**đổi tên class** làm hỏng JS mà không hay biết.
+
+### Quy tắc vàng khi restyle
+
+> **Chỉ đổi phần "trang trí" bên trong mỗi class, KHÔNG đổi tên class** trừ khi
+> bạn sửa cả CSS lẫn JS cùng lúc.
+
+Đó là lý do khi làm Phase 1, tôi **giữ nguyên** toàn bộ tên class
+(`.card`, `.button`, `.account-card`, `.transaction-row`, `.badge`,
+`.manage-row`...) — chỉ thay giá trị màu, font, khoảng cách bên trong mỗi class.
+
+### Cách tự kiểm tra đã an toàn chưa
+
+Có một mẹo: tìm tất cả tên class **được dùng trong HTML + JS**, rồi đối chiếu
+xem CSS có định nghĩa cho từng cái không. Nếu tên nào "có nhãn mà CSS không biết"
+→ đang có chỗ hỏng.
+
+```bash
+# Ví dụ đếm nhanh: tìm class được gán trong JS
+grep -oE 'className = "[^"]+"' public/app.js
+```
+
+Trong dự án này, tôi đã viết một script Node nhỏ để quét toàn bộ `app.js` +
+`index.html`, so với `styles.css`, và xác nhận **không thiếu class nào**. Bạn
+có thể tái sử dụng cách này mỗi lần restyle.
+
+---
+
+## Điểm dừng Phase 1
+
+Sau Phase 1, bạn sẽ có:
+
+- [x] Bộ design tokens "sổ tay" (giấy, mực, xanh rêu, đất nung, vàng đất)
+- [x] Font pairing Fraunces (số/tiêu đề) + Inter (nội dung), có fallback
+- [x] Toàn bộ tab cũ restyle, không còn màu indigo
+- [x] Thanh điều hướng chuyển xuống đáy trên điện thoại
+
+**Tự kiểm tra hiểu bài**:
+1. Design token là gì và tại sao nó giúp đổi màu dễ hơn?
+2. Vì sao số tiền dùng font serif còn chữ thường dùng sans-serif?
+3. Nếu lỡ đổi tên một class trong CSS mà quên JS, chuyện gì xảy ra?
+
