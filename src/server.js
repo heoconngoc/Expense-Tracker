@@ -1,5 +1,8 @@
 import app from "./app.js";
-import { initializeDatabase } from "./database.js";
+import {
+  initializeDatabase,
+  runMigrations,
+} from "./database.js";
 
 const PORT = process.env.PORT || 3000;
 
@@ -9,6 +12,16 @@ async function start() {
   if (initialized) {
     console.log(
       "Database initialized with reference data only (currencies and categories)."
+    );
+  }
+
+  const applied = await runMigrations({
+    freshInstall: initialized,
+  });
+
+  if (applied.length > 0) {
+    console.log(
+      `Applied migrations: ${applied.join(", ")}`
     );
   }
 
