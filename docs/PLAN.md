@@ -117,9 +117,9 @@ quyết định sau khi dùng thực tế.
 **Mục tiêu**: quy ước + CI chạy được, mọi việc sau này có kỷ luật.
 
 - [x] Tạo `docs/PLAN.md`, `docs/LESSONS.md`
-- [ ] Quy ước code + cấu trúc thư mục (mục 6 below)
-- [ ] GitHub Actions CI: chạy `npm test` trên mỗi push/PR vào `main` và `develop`
-- [ ] Tạo nhánh `develop`, mọi feature làm trên đó, PR về `main`
+- [x] Quy ước code + cấu trúc thư mục (mục 6 below)
+- [x] GitHub Actions CI: chạy `npm test` trên mỗi push/PR vào `main` và `develop`
+- [x] Tạo nhánh `develop`, mọi feature làm trên đó, PR về `main`
 
 **Điều kiện hoàn thành**: CI xanh trên GitHub, nhánh `develop` tồn tại.
 
