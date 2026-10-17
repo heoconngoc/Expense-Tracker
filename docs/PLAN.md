@@ -33,7 +33,7 @@ kiểm tiền integer, transaction), nhưng:
 
 ### 3.1 Giữ nguyên (không đụng tới logic)
 
-- Tab Chuyển khoản: API `/api/transfers`, `transferService`, UI dialog
+- Tab Chuyển khoản: API `/transfers`, `transferService`, UI dialog
 - Tab Quản lý CRUD: tài khoản, danh mục, tiền tệ
 - Toàn bộ logic tiền integer minor units, atomic balance updates, archive-preserving history
 
@@ -41,7 +41,7 @@ kiểm tiền integer, transaction), nhưng:
 
 | Tính năng | Mô tả |
 |---|---|
-| **Tài sản** (tab mới) | Tổng tài sản quy về VND = tiền (mọi tài khoản, quy đổi tỷ giá) + giá trị vàng. Tài khoản phân loại: `spending` (chi tiêu) / `savings` (tiết kiệm) / `gold` (vàng). Vàng: nhập số lượng (chỉ/lượng/lưu ký), tự nhân giá SJC |
+| **Tài sản** (tab mới) | Tổng tài sản quy về VND = tiền (mọi tài khoản, quy đổi tỷ giá) + giá trị vàng. Tài khoản phân loại: `spending` (chi tiêu) / `savings` (tiết kiệm) / `gold` (vàng). Vàng: nhập số lượng (chỉ/lượng), tự nhân giá SJC |
 | **Mục tiêu tiết kiệm** (tab mới) | Đặt tên mục tiêu + số tiền目标 + hạn (tùy chọn), ghi nhận đóng góp, bar tiến độ visual |
 | **Tổng quan** (cải thiện) | Card tổng tài sản lớn (số sao của trang), biểu đồ cột chi tiêu 6 tháng gần nhất (Chart.js), biểu đồ tròn chi tiêu theo danh mục trong tháng |
 | **Giao dịch** (cải thiện) | Form nhập nhanh: gợi ý danh mục/tài khoản dùng nhiều lần trước (datalist) |
@@ -140,25 +140,34 @@ trông mới, không còn màu indigo, dùng được trên điện thoại.
 
 **Mục tiêu**: schema + API phục vụ tính năng mới. Không đụng logic cũ.
 
-- [ ] Migration `002_asset_features.sql`:
+- [x] Migration `002_asset_features.sql`:
   - `accounts.type TEXT NOT NULL DEFAULT 'spending' CHECK(type IN ('spending','savings','gold'))`
-  - `gold_holdings(id, account_id, quantity, unit CHECK IN ('chi','luong','luu_ky'), note, created_at)` — unit: 1 lượng = 10 chỉ
-  - `savings_goals(id, name, target_amount, currency_id, deadline, archived, created_at)`
-  - `savings_contributions(id, goal_id, amount, note, created_at)`
-  - bảng `app_settings` mở rộng: key `manual_gold_price_vnd_per_luong`, `last_gold_price_source`, `last_gold_price_fetched_at`
-- [ ] Migration script có guard: backup `expense.db` trước khi chạy
-- [ ] API mới:
-  - `GET /api/assets` — tổng tài sản quy VND: sum accounts theo loại + gold_holdings × giá
-  - `GET /api/gold-prices/current` — proxy cache giá SJC (TTL 30 phút) từ `giavang.now`, fallback đọc manual price
-  - `PUT /api/settings/gold-price` — lưu giá vàng tay
-  - Resources CRUD: `gold-holdings`, `savings-goals` (+ `POST /:id/contributions`)
-  - `GET /api/dashboard/summary?month=` mở rộng: trả thêm data cho biểu đồ
-    (chi tiêu theo danh mục, 6 tháng gần nhất)
-- [ ] Unit test Jest cho: migration, gold price service (mock fetch), assets aggregation, savings goals math
-- [ ] API test supertest cho endpoints mới
+  - `gold_holdings(id, account_id, quantity, unit CHECK IN ('chi','luong'), note, created_at)` — quantity lưu integer phần nghìn đơn vị (1.5 lượng = 1500); 1 lượng = 10 chỉ
+  - `savings_goals(id, name, target_amount, currency_id, deadline, is_archived, created_at)`
+  - `savings_contributions(id, goal_id, amount, note, contributed_at)`
+  - `exchange_rates(id, currency_id, rate_to_vnd, source, updated_at)` — tỷ giá micro units quy về VND
+  - `app_settings` mở rộng: `manual_gold_price_vnd_per_luong`, `cached_gold_price_vnd_per_luong`, `cached_gold_price_source`, `cached_gold_price_fetched_at`
+- [x] Migration runner `runMigrations()` trong `src/database.js`: bảng `schema_migrations`, tự chạy khi server start, backup `expense.db` (checkpoint WAL trước) vào `database/backups/`, baseline migration 001 cho DB cũ
+- [x] API mới (giữ convention repo: KHÔNG có prefix `/api`):
+  - `GET /assets` — tổng tài sản quy VND: sum accounts theo loại + gold_holdings × giá
+  - `GET /gold-prices/current`, `POST /gold-prices/refresh` — proxy cache giá SJC (TTL 30 phút) từ `giavang.now`, fallback manual → cache
+  - `GET /settings`, `PUT /settings/gold-price`, `DELETE /settings/gold-price`
+  - `GET/POST/PUT/DELETE /gold-holdings`
+  - `GET/POST/PUT/DELETE /savings-goals` (+ `GET/POST /:id/contributions`, `DELETE /contributions/:id`)
+  - `GET /exchange-rates`, `POST /exchange-rates/refresh`, `PUT /exchange-rates/:currencyId` (nguồn open.er-api.com)
+  - `GET /dashboard` mở rộng: thêm `monthly` (thu/chi 6 tháng gần nhất, param `months`) — `byCategory` đã có sẵn
+  - `accounts` API hỗ trợ thêm field `type` (create/update/list)
+- [x] Unit test Jest cho: migration, gold price service (mock fetch), exchange rate service, assets aggregation, gold holdings math, savings goals math, monthly trend
+- [x] API test supertest cho settings endpoint
+
+**Ghi chú lệch kế hoạch (đã chốt khi làm)**:
+- Bỏ unit `luu_ky` (lưu ký) vì đó là hình thức lưu trữ, không phải đơn vị đo; dùng cột `note` để ghi. Giữ 2 đơn vị `chi` và `luong`.
+- Routes KHÔNG có `/api` prefix cho đồng bộ với code cũ (`/accounts`, `/dashboard`...).
+- Tổng tài sản quy về **VND** cố định (không theo `base_currency_id`) vì giá vàng niêm yết VND.
+- Chưa làm `GET /api/dashboard/summary?month=`; thay bằng mở rộng `GET /dashboard` sẵn có.
 
 **Điều kiện hoàn thành**: `npm test` xanh, test mới pass, API cũ không đổi
-behavior (test cũ không sửa, trừ khi cần thêm field).
+behavior (test cũ không sửa, trừ khi cần thêm field). ✅ 112 test xanh.
 
 ### Phase 3 — Frontend tính năng mới
 
@@ -229,8 +238,9 @@ push code → 2 phút sau app tự cập nhật, DB sống qua redeploy (có bac
    namespace object hoặc ES module (browser supports ESM qua `<script type="module">`).
 8. **CSS**: mọi màu/spacing dùng design tokens (CSS variables). Tên class theo
    convention hiện có (kebab-case, mô tả vai trò). Mobile-first breakpoints.
-9. **API nhất quán**: resource trả `{ data: [...] }` hoặc `{ data: {...} }`,
-   lỗi trả `{ error: { code, message } }`.
+9. **API nhất quán**: resource trả thẳng array/object (vd `[{...}]`, `{...}`),
+   lỗi trả `{ error: "message" }`. **Không** dùng prefix `/api` — route gốc
+   (`/accounts`, `/assets`, `/savings-goals`...).
 10. **Secrets**: không commit `.env`, không commit SSH key. DB path cấu hình
     qua env `DB_PATH`.
 

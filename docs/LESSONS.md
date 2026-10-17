@@ -18,6 +18,12 @@
   - [Bài 1.3 — Mobile-first responsive: một layout, nhiều kích thước](#bài-13--mobile-first-responsive-một-layout-nhiều-kích-thước)
   - [Bài 1.4 — Vì sao phải giữ nguyên tên class khi đổi giao diện](#bài-14--vì-sao-phải-giữ-nguyên-tên-class-khi-đổi-giao-diện)
 
+- [Phase 2 — Backend: data model + API mới](#phase-2--backend-data-model--api-mới)
+  - [Bài 2.1 — Migration: nâng cấp database không mất dữ liệu](#bài-21--migration-nâng-cấp-database-không-mất-dữ-liệu)
+  - [Bài 2.2 — WAL mode: tại sao copy file .db là chưa đủ để backup](#bài-22--wal-mode-tại-sao-copy-file-db-là-chưa-đủ-để-backup)
+  - [Bài 2.3 — Lưu số thập phân và tỷ giá bằng số nguyên](#bài-23--lưu-số-thập-phân-và-tỷ-giá-bằng-số-nguyên)
+  - [Bài 2.4 — Test không phụ thuộc mạng: tiêm (inject) fetch](#bài-24--test-không-phụ-thuộc-mạng-tiêm-inject-fetch)
+
 ---
 
 # Phase 0 — Nền móng
@@ -494,4 +500,242 @@ Sau Phase 1, bạn sẽ có:
 1. Design token là gì và tại sao nó giúp đổi màu dễ hơn?
 2. Vì sao số tiền dùng font serif còn chữ thường dùng sans-serif?
 3. Nếu lỡ đổi tên một class trong CSS mà quên JS, chuyện gì xảy ra?
+
+---
+
+# Phase 2 — Backend: data model + API mới
+
+## Bài 2.1 — Migration: nâng cấp database không mất dữ liệu
+
+### Vấn đề
+
+App đang chạy với dữ liệu thật của bạn trong `database/expense.db`. Bây giờ ta cần
+**thêm cột** `type` vào bảng `accounts`, thêm vài bảng mới. Không thể xóa database
+làm lại — sẽ mất hết giao dịch.
+
+### Migration là gì?
+
+**Migration** là một file SQL mô tả **một bước thay đổi cấu trúc database**.
+Thay vì sửa file `schema.sql` (dành cho database tạo mới), ta viết file riêng để
+nâng cấp database đang có:
+
+```
+database/migrations/001_money_to_integer.sql
+database/migrations/002_asset_features.sql
+```
+
+### Nguyên tắc vàng: file migration cũ không bao giờ sửa
+
+Mỗi file migration chỉ chạy **một lần duy nhất** trên mỗi database. Sau khi đã
+chạy, nó là "lịch sử". Muốn đổi gì tiếp, **thêm file mới** `003_...sql`. Nếu bạn
+sửa file `002` đã chạy trên máy bạn, thì database máy bạn và database trên server
+sẽ khác nhau — không ai biết bản nào đúng.
+
+### Làm sao biết migration nào đã chạy?
+
+Ta tạo một bảng ghi nhớ:
+
+```sql
+CREATE TABLE schema_migrations (
+  version TEXT PRIMARY KEY,          -- "001", "002"
+  applied_at TIMESTAMP
+);
+```
+
+Khi khởi động, server đọc thư mục `migrations/`, so với bảng này, và **chỉ chạy
+những file chưa có**. File `src/database.js` có hàm `runMigrations()` làm việc đó.
+
+### Trường hợp khó: database cũ chưa có bảng theo dõi
+
+Database `expense.db` của bạn đã chạy migration `001` từ trước (bằng tay), nhưng
+chưa hề có bảng `schema_migrations`. Nếu ta cứ thế chạy lại `001` sẽ lỗi (bảng đã
+đổi rồi). Giải pháp gọi là **baseline**: lần đầu chạy, nếu thấy database đã có
+bảng `accounts` nhưng bảng theo dõi trống, ta **đánh dấu `001` là "đã chạy"** mà
+không thực thi lại, rồi mới chạy `002`. Database tạo mới thì ngược lại — `schema.sql`
+đã là bản mới nhất nên ta đánh dấu tất cả là "đã chạy" luôn.
+
+### Backup trước khi đụng vào
+
+Trước khi chạy migration, `runMigrations()` tự sao lưu database vào
+`database/backups/expense-<thời-gian>-pre-<version>.db`. Có backup, lỡ migration
+sai vẫn quay lại được. (Thư mục này bị `.gitignore` vì chứa dữ liệu thật.)
+
+---
+
+## Bài 2.2 — WAL mode: tại sao copy file .db là chưa đủ để backup
+
+Đây là bài học **tốn thời gian nhất** của Phase 2, đáng ghi lại.
+
+### Chuyện gì đã xảy ra?
+
+Tôi định test migration trên một bản sao của database thật. Tôi gõ:
+
+```bash
+cp database/expense.db /tmp/test/expense.db
+```
+
+Rồi chạy migration trên bản sao. Kết quả: bảng `accounts` **trống trơn** — mất hết
+5 tài khoản! Tưởng migration xóa dữ liệu. Hóa ra không phải.
+
+### Nguyên nhân: WAL mode
+
+App bật chế độ **WAL** (Write-Ahead Logging) cho SQLite:
+
+```sql
+PRAGMA journal_mode = WAL;
+```
+
+Trong chế độ này, dữ liệu mới **không ghi ngay vào `expense.db`** mà ghi vào một
+file phụ `expense.db-wal` (Write-Ahead Log). File `.db` chính chỉ được cập nhật
+định kỳ khi có ai đó "checkpoint" (đổ WAL vào file chính).
+
+Nhìn lại thư mục:
+
+```
+expense.db       40960 bytes   ← file chính, chưa có dữ liệu mới
+expense.db-wal  140112 bytes   ← dữ liệu thật nằm ở đây!
+```
+
+Tôi chỉ copy `expense.db` → mất luôn phần trong `.db-wal`. Lỗi của **cách copy**,
+không phải của migration.
+
+### Cách làm đúng
+
+Trước khi copy, buộc SQLite đổ hết WAL vào file chính:
+
+```sql
+PRAGMA wal_checkpoint(FULL);
+```
+
+Vì vậy `backupDatabase()` trong `src/database.js` làm đúng thứ tự: **checkpoint
+trước, rồi mới copy file**. Nhờ vậy file backup có đủ dữ liệu.
+
+### Tại sao SQLite dùng WAL?
+
+Ghi vào log phụ nhanh hơn và cho phép đọc/ghi đồng thời. Máy chủ SQLite thật cũng
+khuyến nghị WAL. Đánh đổi: backup phải cẩn thận hơn.
+
+> **Bài học**: Khi backup bất kỳ database nào, đừng bao giờ copy file thô nếu
+> database đang chạy. Luôn dùng cơ chế backup chính thức (với SQLite: `.backup`
+> hoặc `VACUUM INTO`, hoặc checkpoint rồi copy).
+
+---
+
+## Bài 2.3 — Lưu số thập phân và tỷ giá bằng số nguyên
+
+### Số lượng vàng có thể lẻ: 1.5 lượng, 0.5 chỉ
+
+Máy tính lưu số thập phân bằng hệ nhị phân, nên `0.1 + 0.2` không bằng `0.3` mà
+bằng `0.30000000000000004`. Với tiền và tài sản, sai số này tích lũy gây lệch.
+
+Quy tắc của dự án (đã có từ Phase 2.0): **mọi giá trị tiền là số nguyên ở đơn vị
+nhỏ nhất** (USD → cent, VND → đồng). Nhưng vàng nhập theo "lượng"/"chỉ" là số lẻ.
+
+Giải pháp: lưu số lượng vàng bằng số nguyên **phần nghìn** đơn vị:
+
+```
+1.5 lượng  → quantity = 1500
+0.5 chỉ    → quantity = 500
+```
+
+Khi trả về cho frontend thì chia 1000 (`quantity: 1.5`), khi nhận vào thì nhân
+1000. Cột `quantity` trong database vẫn là INTEGER, không bao giờ lưu float.
+
+### Tỷ giá cũng vậy
+
+Tỷ giá USD→VND là 26000 — cũng có thể lẻ (26012.75). Ta lưu bằng **micro units**
+(nhân 1,000,000) thành số nguyên, giống hệt cách bảng `transfers` đã làm:
+
+```
+26000 VND/USD  → rate_to_vnd = 26000000000
+```
+
+Khi tính giá trị, công thức (đều là số nguyên, chỉ làm tròn ở bước cuối):
+
+```
+value_vnd = balance × rate_to_vnd ÷ 1_000_000 ÷ 10^decimal_places
+```
+
+### Điểm cần nhớ
+
+- **Không bao giờ** lưu tiền/tỷ giá/số lượng vàng bằng cột kiểu `REAL`.
+- Chỉ làm tròn **một lần duy nhất** ở bước trả kết quả cuối cùng.
+- Quy ước scale (1000 cho vàng, 1,000,000 cho tỷ giá) phải ghi rõ trong schema,
+  để người sau đọc không đoán mò.
+
+---
+
+## Bài 2.4 — Test không phụ thuộc mạng: tiêm (inject) fetch
+
+### Vấn đề
+
+`goldPriceService` gọi API thật `giavang.now`. Nếu test cứ gọi API thật thì:
+- Chạy test cần internet.
+- Mạng chậm/API chết → test đỏ dù code đúng.
+- Không kiểm soát được dữ liệu trả về (hôm nay giá 140tr, mai 145tr).
+
+### Giải pháp: dependency injection qua tham số
+
+Thay vì gọi thẳng `fetch`, hàm **nhận** hàm `fetch` từ ngoài vào, mặc định dùng
+cái thật:
+
+```js
+export async function fetchGoldPrice({
+  fetchImpl = globalThis.fetch,
+} = {}) {
+  const response = await fetchImpl(GOLD_PRICE_URL, {...});
+  ...
+}
+```
+
+Khi chạy thật, `fetchImpl` là `fetch` có sẵn của Node. Khi test, ta truyền một hàm
+giả:
+
+```js
+const price = await fetchGoldPrice({
+  fetchImpl: async () => ({
+    ok: true,
+    json: async () => ({ buy: 140600000, sell: 143600000 }),
+  }),
+});
+```
+
+### Tại sao cách này hay hơn "mock thư viện"?
+
+Nhiều người dùng `jest.mock()` để thay cả module `fetch`. Cách đó che giấu sự phụ
+thuộc. Truyền tham số (inject) làm **lộ rõ** "hàm này cần mạng" ngay trong chữ ký
+hàm — người đọc code thấy liền. Và test trở nên cực đơn giản, không cần ma thuật.
+
+### Kiểm tra được cả nhánh fallback
+
+Vì swap `fetchImpl` dễ, ta test được mọi tình huống mà không cần mạng:
+
+```js
+// API chết, có giá nhập tay → dùng giá tay
+await getCurrentGoldPrice({
+  fetchImpl: async () => { throw new Error("network down"); },
+});
+```
+
+Đây là lý do `getCurrentGoldPrice` được thiết kế theo thứ tự **API → giá nhập tay
+→ cache cũ → báo lỗi**. Mỗi mắt xích trong chuỗi đó có một test riêng.
+
+---
+
+## Điểm dừng Phase 2
+
+Sau Phase 2, backend có:
+
+- [x] Migration `002` + runner tự động, có backup (an toàn với dữ liệu thật)
+- [x] Bảng mới: `gold_holdings`, `savings_goals`, `savings_contributions`, `exchange_rates`
+- [x] `accounts.type` (spending/savings/gold)
+- [x] API: `/assets`, `/gold-prices`, `/gold-holdings`, `/savings-goals`,
+      `/settings`, `/exchange-rates`, và `/dashboard` mở rộng (`monthly`)
+- [x] 112 test xanh (từ 55), mọi service mới có test, mock fetch không cần mạng
+
+**Tự kiểm tra hiểu bài**:
+1. Vì sao không bao giờ sửa file migration đã chạy, mà phải thêm file mới?
+2. Vì sao copy mỗi file `.db` có thể mất dữ liệu khi bật WAL mode?
+3. Số lượng vàng 0.5 chỉ được lưu trong database như thế nào?
+4. Làm sao test một hàm gọi API mạng mà không cần mạng?
 
