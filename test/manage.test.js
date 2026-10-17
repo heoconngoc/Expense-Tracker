@@ -114,6 +114,49 @@ describe("Account management", () => {
 
     expect(response.status).toBe(404);
   });
+
+  test("POST /accounts defaults the type to spending", async () => {
+    const response = await request(app)
+      .post("/accounts")
+      .send({ name: "Everyday", currencyId: 1 });
+
+    expect(response.status).toBe(201);
+    expect(response.body.type).toBe("spending");
+  });
+
+  test("POST /accounts accepts a gold account", async () => {
+    const response = await request(app)
+      .post("/accounts")
+      .send({
+        name: "SJC Gold",
+        currencyId: 2,
+        type: "gold",
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.type).toBe("gold");
+  });
+
+  test("POST /accounts returns 400 for an unknown type", async () => {
+    const response = await request(app)
+      .post("/accounts")
+      .send({
+        name: "Weird",
+        currencyId: 1,
+        type: "crypto",
+      });
+
+    expect(response.status).toBe(400);
+  });
+
+  test("PUT /accounts/:id changes the account type", async () => {
+    const response = await request(app)
+      .put("/accounts/1")
+      .send({ type: "savings" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.type).toBe("savings");
+  });
 });
 
 describe("Category management", () => {
