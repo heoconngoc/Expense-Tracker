@@ -1,3 +1,8 @@
+import {
+  renderCategoryChart,
+  renderTrendChart,
+} from "./js/charts.js";
+
 // ---- State ----
 let selectedAccountId = null;
 let editingTransactionId = null;
@@ -5,8 +10,13 @@ let completingTransfer = null;
 let editingAccountId = null;
 let editingCategoryId = null;
 let editingCurrencyId = null;
+let editingGoldHoldingId = null;
+let editingGoalId = null;
+let contributingGoal = null;
+let currentGoldPrice = null;
 
 const accountsById = new Map();
+const currenciesById = new Map();
 
 const dialog = document.querySelector("#transaction-dialog");
 const transferDialog = document.querySelector("#transfer-dialog");
@@ -14,6 +24,10 @@ const completeDialog = document.querySelector("#complete-transfer-dialog");
 const accountDialog = document.querySelector("#account-dialog");
 const categoryDialog = document.querySelector("#category-dialog");
 const currencyDialog = document.querySelector("#currency-dialog");
+const goldHoldingDialog = document.querySelector("#gold-holding-dialog");
+const goldPriceDialog = document.querySelector("#gold-price-dialog");
+const goalDialog = document.querySelector("#goal-dialog");
+const contributionDialog = document.querySelector("#contribution-dialog");
 
 const form = document.querySelector("#transaction-form");
 const transferForm = document.querySelector("#transfer-form");
@@ -21,6 +35,10 @@ const completeForm = document.querySelector("#complete-transfer-form");
 const accountForm = document.querySelector("#account-form");
 const categoryForm = document.querySelector("#category-form");
 const currencyForm = document.querySelector("#currency-form");
+const goldHoldingForm = document.querySelector("#gold-holding-form");
+const goldPriceForm = document.querySelector("#gold-price-form");
+const goalForm = document.querySelector("#goal-form");
+const contributionForm = document.querySelector("#contribution-form");
 
 const monthFilter = document.querySelector("#month-filter");
 const currencyFilter = document.querySelector("#currency-filter");
@@ -74,6 +92,40 @@ function getMonthRange(month) {
   return { start, end };
 }
 
+const TYPE_LABELS = {
+  spending: "Chi tiêu",
+  savings: "Tiết kiệm",
+  gold: "Vàng",
+};
+
+function typeLabel(type) {
+  return TYPE_LABELS[type] ?? type;
+}
+
+function formatVnd(amount) {
+  return new Intl.NumberFormat("vi-VN", {
+    style: "currency",
+    currency: "VND",
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
+
+function formatQuantity(quantity) {
+  return new Intl.NumberFormat("vi-VN", {
+    maximumFractionDigits: 3,
+  }).format(quantity);
+}
+
+function holdingValueVnd(holding) {
+  if (!currentGoldPrice) {
+    return null;
+  }
+
+  const chi = holding.unit === "luong" ? holding.quantity * 10 : holding.quantity;
+
+  return Math.round((currentGoldPrice.price * chi) / 10);
+}
+
 function createEmptyState(title, subtitle = "", buttonText = null) {
   const box = document.createElement("div");
   box.className = "empty-state";
@@ -97,6 +149,31 @@ function createEmptyState(title, subtitle = "", buttonText = null) {
   }
 
   return box;
+}
+
+// ---- Toast ----
+
+const toast = document.createElement("div");
+toast.className = "toast";
+document.body.append(toast);
+
+let toastTimer = null;
+
+function showToast(message) {
+  toast.textContent = message;
+  toast.classList.add("visible");
+
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove("visible"), 4000);
+}
+
+async function safe(task) {
+  try {
+    await task();
+  } catch (err) {
+    console.error(err);
+    showToast(err?.message || "Có lỗi xảy ra khi tải dữ liệu");
+  }
 }
 
 // ---- Tabs ----
@@ -126,6 +203,12 @@ async function loadCurrencies() {
 
   const currencies = await response.json();
 
+  currenciesById.clear();
+
+  for (const currency of currencies) {
+    currenciesById.set(currency.id, currency);
+  }
+
   const previous = currencyFilter.value;
 
   currencyFilter.replaceChildren();
@@ -150,6 +233,17 @@ async function loadCurrencies() {
     option.textContent = `${currency.code} — ${currency.name}`;
     option.dataset.decimalPlaces = currency.decimalPlaces;
     accountCurrency.append(option);
+  }
+
+  const goalCurrency = document.querySelector("#goal-currency");
+  goalCurrency.replaceChildren();
+
+  for (const currency of currencies) {
+    const option = document.createElement("option");
+    option.value = currency.id;
+    option.textContent = `${currency.code} — ${currency.name}`;
+    option.dataset.decimalPlaces = currency.decimalPlaces;
+    goalCurrency.append(option);
   }
 
   updateAccountBalanceHint();
@@ -663,6 +757,74 @@ async function loadDashboard() {
     dashboard.currency,
     dashboard.decimalPlaces
   );
+
+  await renderCharts(dashboard);
+}
+
+async function renderCharts(dashboard) {
+  const trendCanvas = document.querySelector("#trend-chart");
+  const categoryCanvas = document.querySelector("#category-chart");
+
+  clearChartFallback(trendCanvas);
+  clearChartFallback(categoryCanvas);
+
+  try {
+    await renderTrendChart(
+      trendCanvas,
+      dashboard.monthly,
+      dashboard.currency,
+      dashboard.decimalPlaces
+    );
+  } catch (err) {
+    console.error("Failed to render trend chart", err);
+    showChartFallback(
+      trendCanvas,
+      `Không vẽ được biểu đồ: ${err?.message || "lỗi không xác định"}`
+    );
+  }
+
+  try {
+    await renderCategoryChart(
+      categoryCanvas,
+      dashboard.byCategory,
+      dashboard.currency,
+      dashboard.decimalPlaces
+    );
+  } catch (err) {
+    console.error("Failed to render category chart", err);
+    showChartFallback(
+      categoryCanvas,
+      `Không vẽ được biểu đồ: ${err?.message || "lỗi không xác định"}`
+    );
+  }
+}
+
+function clearChartFallback(canvas) {
+  const box = canvas?.parentElement;
+
+  if (!box) {
+    return;
+  }
+
+  box.querySelector(".chart-fallback")?.remove();
+  canvas.hidden = false;
+}
+
+function showChartFallback(canvas, message) {
+  const box = canvas.parentElement;
+
+  if (!box) {
+    return;
+  }
+
+  box.querySelector(".chart-fallback")?.remove();
+
+  const note = document.createElement("p");
+  note.className = "chart-fallback";
+  note.textContent = message;
+
+  canvas.hidden = true;
+  box.append(note);
 }
 
 function refreshDashboard() {
@@ -859,6 +1021,18 @@ completeForm.addEventListener("submit", async (event) => {
 
 // ---- Account dialog ----
 
+function updateAccountFormVisibility() {
+  const balanceField = document.querySelector("#account-balance-field");
+  const type = document.querySelector("#account-type").value;
+
+  if (editingAccountId !== null) {
+    balanceField.hidden = true;
+    return;
+  }
+
+  balanceField.hidden = type === "gold";
+}
+
 function openAccountDialog(account = null) {
   editingAccountId = account ? account.id : null;
 
@@ -873,15 +1047,18 @@ function openAccountDialog(account = null) {
   if (account) {
     document.querySelector("#account-name").value = account.name;
     document.querySelector("#account-currency").value = account.currencyId;
+    document.querySelector("#account-type").value = account.type ?? "spending";
     document.querySelector("#account-active").value = account.isActive ? "1" : "0";
     balanceField.hidden = true;
   } else {
     document.querySelector("#account-initial-balance").value = "0";
+    document.querySelector("#account-type").value = "spending";
     document.querySelector("#account-active").value = "1";
     balanceField.hidden = false;
   }
 
   updateAccountBalanceHint();
+  updateAccountFormVisibility();
   accountDialog.showModal();
 }
 
@@ -894,6 +1071,7 @@ document.querySelector("#cancel-account").addEventListener("click", () => {
 });
 
 document.querySelector("#account-currency").addEventListener("change", updateAccountBalanceHint);
+document.querySelector("#account-type").addEventListener("change", updateAccountFormVisibility);
 
 accountForm.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -901,6 +1079,7 @@ accountForm.addEventListener("submit", async (event) => {
   const account = {
     name: document.querySelector("#account-name").value.trim(),
     currencyId: Number(document.querySelector("#account-currency").value),
+    type: document.querySelector("#account-type").value,
     isActive: document.querySelector("#account-active").value === "1",
   };
 
@@ -1203,6 +1382,1007 @@ async function loadManageCurrencies() {
   }
 }
 
+// ---- Assets tab ----
+
+function makeButton(text, className, onClick) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = className;
+  button.textContent = text;
+  button.addEventListener("click", onClick);
+  return button;
+}
+
+async function loadAssetsTab() {
+  await loadGoldPrice();
+
+  await Promise.all([
+    loadAssets(),
+    loadGoldHoldings(),
+    loadExchangeRates(),
+  ]);
+}
+
+async function loadGoldPrice() {
+  try {
+    const response = await fetch("/gold-prices/current");
+
+    if (!response.ok) {
+      throw new Error("Gold price unavailable");
+    }
+
+    currentGoldPrice = await response.json();
+  } catch {
+    currentGoldPrice = null;
+  }
+
+  renderGoldPrice();
+}
+
+function renderGoldPrice() {
+  const value = document.querySelector("#gold-price-value");
+  const meta = document.querySelector("#gold-price-meta");
+
+  if (!currentGoldPrice) {
+    value.textContent = "Chưa có giá";
+    meta.textContent = "Bấm “Nhập tay” để đặt giá vàng.";
+    return;
+  }
+
+  value.textContent = `${formatVnd(currentGoldPrice.price)} /lượng`;
+
+  const sources = {
+    "giavang.now": "Tự động",
+    manual: "Nhập tay",
+    cache: "Bản lưu",
+  };
+
+  const label = sources[currentGoldPrice.source] ?? currentGoldPrice.source;
+  const when = currentGoldPrice.fetchedAt
+    ? new Date(currentGoldPrice.fetchedAt).toLocaleString("vi-VN")
+    : "";
+
+  meta.textContent = when ? `${label} · ${when}` : label;
+}
+
+async function loadAssets() {
+  let assets;
+
+  try {
+    const response = await fetch("/assets");
+
+    if (!response.ok) {
+      throw new Error("Failed to load assets");
+    }
+
+    assets = await response.json();
+  } catch (err) {
+    console.error(err);
+
+    for (const id of ["#total-assets", "#assets-total"]) {
+      document.querySelector(id).textContent = "—";
+    }
+
+    document.querySelector("#assets-breakdown").replaceChildren();
+    document.querySelector("#assets-groups-summary").replaceChildren();
+    document.querySelector("#asset-accounts").replaceChildren();
+    return;
+  }
+
+  const total = formatVnd(assets.total);
+
+  document.querySelector("#total-assets").textContent = total;
+  document.querySelector("#assets-total").textContent = total;
+
+  renderBreakdown(document.querySelector("#assets-breakdown"), assets);
+  renderBreakdown(document.querySelector("#assets-groups-summary"), assets);
+  renderAssetAccounts(assets);
+}
+
+function renderBreakdown(container, assets) {
+  container.replaceChildren();
+
+  for (const type of ["spending", "savings", "gold"]) {
+    const hasAccounts = assets.accounts.some(
+      (account) => account.type === type
+    );
+
+    if (!hasAccounts) {
+      continue;
+    }
+
+    const chip = document.createElement("span");
+    chip.className = `chip ${type}`;
+
+    const label = document.createElement("span");
+    label.textContent = typeLabel(type);
+
+    const amount = document.createElement("strong");
+    amount.textContent = formatVnd(assets.byType[type] ?? 0);
+
+    chip.append(label, amount);
+    container.append(chip);
+  }
+
+  if (assets.missingRates.length > 0) {
+    const chip = document.createElement("span");
+    chip.className = "chip";
+    chip.textContent = `Thiếu tỷ giá: ${assets.missingRates.join(", ")}`;
+    container.append(chip);
+  }
+}
+
+function assetAccountRow(account) {
+  const row = document.createElement("div");
+  row.className = "manage-row";
+
+  const info = document.createElement("div");
+
+  const name = document.createElement("strong");
+  name.textContent = account.name;
+
+  const detail = document.createElement("p");
+
+  if (account.type === "gold") {
+    detail.textContent =
+      account.valueVnd === null
+        ? "Chưa có giá vàng"
+        : formatVnd(account.valueVnd);
+  } else {
+    const balance = formatMoney(
+      account.balance,
+      account.currency,
+      account.decimalPlaces
+    );
+
+    detail.textContent =
+      account.valueVnd === null
+        ? `${balance} · thiếu tỷ giá`
+        : `${balance} · ${formatVnd(account.valueVnd)}`;
+  }
+
+  info.append(name, detail);
+  row.append(info);
+
+  return row;
+}
+
+function renderAssetAccounts(assets) {
+  const container = document.querySelector("#asset-accounts");
+  container.replaceChildren();
+
+  if (assets.accounts.length === 0) {
+    container.append(createEmptyState("Chưa có tài khoản nào."));
+    return;
+  }
+
+  for (const type of ["spending", "savings", "gold"]) {
+    const list = assets.accounts.filter(
+      (account) => account.type === type
+    );
+
+    if (list.length === 0) {
+      continue;
+    }
+
+    const heading = document.createElement("p");
+    heading.className = "eyebrow";
+    heading.textContent = typeLabel(type);
+    container.append(heading);
+
+    for (const account of list) {
+      container.append(assetAccountRow(account));
+    }
+  }
+}
+
+// ---- Gold holdings ----
+
+async function loadGoldHoldings() {
+  const response = await fetch("/gold-holdings");
+
+  if (!response.ok) {
+    throw new Error("Failed to load gold holdings");
+  }
+
+  const holdings = await response.json();
+
+  const container = document.querySelector("#gold-holdings");
+  container.replaceChildren();
+
+  if (holdings.length === 0) {
+    container.append(
+      createEmptyState(
+        "Chưa ghi nhận vàng nào.",
+        "Thêm số vàng đang giữ để tính vào tổng tài sản."
+      )
+    );
+    return;
+  }
+
+  for (const holding of holdings) {
+    const row = document.createElement("div");
+    row.className = "manage-row";
+
+    const info = document.createElement("div");
+
+    const name = document.createElement("strong");
+    name.className = "holding-quantity";
+    name.textContent = `${formatQuantity(holding.quantity)} ${
+      holding.unit === "luong" ? "lượng" : "chỉ"
+    }`;
+
+    const detail = document.createElement("p");
+    const parts = [holding.accountName];
+    const value = holdingValueVnd(holding);
+
+    if (value !== null) {
+      parts.push(formatVnd(value));
+    }
+
+    if (holding.note) {
+      parts.push(holding.note);
+    }
+
+    detail.textContent = parts.join(" · ");
+
+    info.append(name, detail);
+
+    const actions = document.createElement("div");
+    actions.className = "manage-actions";
+
+    actions.append(
+      makeButton("Sửa", "button ghost small", () =>
+        openGoldHoldingDialog(holding)
+      ),
+      makeButton("Xóa", "button danger small", async () => {
+        if (!window.confirm(`Xóa ${formatQuantity(holding.quantity)} ${
+          holding.unit === "luong" ? "lượng" : "chỉ"
+        } vàng?`)) {
+          return;
+        }
+
+        try {
+          const response = await fetch(`/gold-holdings/${holding.id}`, {
+            method: "DELETE",
+          });
+
+          if (!response.ok) {
+            throw new Error("Failed to delete holding");
+          }
+
+          await refreshAll();
+        } catch (err) {
+          console.error(err);
+        }
+      })
+    );
+
+    row.append(info, actions);
+    container.append(row);
+  }
+}
+
+function fillGoldAccountSelect(select, selectedId) {
+  select.replaceChildren();
+
+  for (const account of accountsById.values()) {
+    if (account.type !== "gold") {
+      continue;
+    }
+
+    const option = document.createElement("option");
+    option.value = account.id;
+    option.textContent = `${account.name} (${account.currency})`;
+    select.append(option);
+  }
+
+  if (selectedId) {
+    select.value = selectedId;
+  }
+}
+
+function openGoldHoldingDialog(holding = null) {
+  editingGoldHoldingId = holding ? holding.id : null;
+
+  document.querySelector("#gold-holding-form-title").textContent =
+    holding ? "Sửa vàng" : "Thêm vàng";
+
+  goldHoldingForm.reset();
+  document.querySelector("#gold-holding-error").textContent = "";
+
+  fillGoldAccountSelect(
+    document.querySelector("#gold-holding-account"),
+    holding?.accountId ?? null
+  );
+
+  if (holding) {
+    document.querySelector("#gold-holding-quantity").value = holding.quantity;
+    document.querySelector("#gold-holding-unit").value = holding.unit;
+    document.querySelector("#gold-holding-note").value = holding.note ?? "";
+  } else {
+    document.querySelector("#gold-holding-unit").value = "luong";
+  }
+
+  goldHoldingDialog.showModal();
+}
+
+document.querySelector("#add-gold-holding").addEventListener("click", () => {
+  const hasGoldAccount = [...accountsById.values()].some(
+    (account) => account.type === "gold"
+  );
+
+  if (!hasGoldAccount) {
+    window.alert(
+      "Hãy tạo một tài khoản loại “Vàng” trong tab Quản lý trước."
+    );
+    return;
+  }
+
+  openGoldHoldingDialog();
+});
+
+document
+  .querySelector("#cancel-gold-holding")
+  .addEventListener("click", () => {
+    goldHoldingDialog.close();
+  });
+
+goldHoldingForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  const holding = {
+    accountId: Number(
+      document.querySelector("#gold-holding-account").value
+    ),
+    quantity: Number(
+      document.querySelector("#gold-holding-quantity").value
+    ),
+    unit: document.querySelector("#gold-holding-unit").value,
+    note: document.querySelector("#gold-holding-note").value.trim() || null,
+  };
+
+  try {
+    const url =
+      editingGoldHoldingId === null
+        ? "/gold-holdings"
+        : `/gold-holdings/${editingGoldHoldingId}`;
+
+    const method = editingGoldHoldingId === null ? "POST" : "PUT";
+
+    const response = await fetch(url, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(holding),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "Không lưu được vàng");
+    }
+
+    goldHoldingDialog.close();
+    await refreshAll();
+  } catch (err) {
+    document.querySelector("#gold-holding-error").textContent = err.message;
+  }
+});
+
+// ---- Gold price ----
+
+document.querySelector("#refresh-gold-price").addEventListener("click", async () => {
+  try {
+    const response = await fetch("/gold-prices/refresh", { method: "POST" });
+
+    if (!response.ok) {
+      const data = await response.json();
+      throw new Error(data.error || "Không lấy được giá vàng");
+    }
+
+    currentGoldPrice = await response.json();
+    renderGoldPrice();
+    await loadAssets();
+  } catch (err) {
+    window.alert(err.message);
+  }
+});
+
+document.querySelector("#edit-gold-price").addEventListener("click", async () => {
+  goldPriceForm.reset();
+  document.querySelector("#gold-price-error").textContent = "";
+
+  try {
+    const response = await fetch("/settings");
+
+    if (response.ok) {
+      const settings = await response.json();
+
+      if (settings.manualGoldPriceVndPerLuong) {
+        document.querySelector("#gold-price-input").value =
+          settings.manualGoldPriceVndPerLuong;
+      } else if (currentGoldPrice) {
+        document.querySelector("#gold-price-input").value =
+          currentGoldPrice.price;
+      }
+    }
+  } catch (err) {
+    console.error(err);
+  }
+
+  goldPriceDialog.showModal();
+});
+
+document.querySelector("#cancel-gold-price").addEventListener("click", () => {
+  goldPriceDialog.close();
+});
+
+goldPriceForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  try {
+    const response = await fetch("/settings/gold-price", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        price: Number(document.querySelector("#gold-price-input").value),
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "Không lưu được giá vàng");
+    }
+
+    goldPriceDialog.close();
+    await loadAssetsTab();
+  } catch (err) {
+    document.querySelector("#gold-price-error").textContent = err.message;
+  }
+});
+
+document.querySelector("#clear-gold-price").addEventListener("click", async () => {
+  try {
+    await fetch("/settings/gold-price", { method: "DELETE" });
+    goldPriceDialog.close();
+    await loadAssetsTab();
+  } catch (err) {
+    console.error(err);
+  }
+});
+
+// ---- Exchange rates ----
+
+async function loadExchangeRates() {
+  const response = await fetch("/exchange-rates");
+
+  if (!response.ok) {
+    throw new Error("Failed to load exchange rates");
+  }
+
+  const rates = await response.json();
+
+  const container = document.querySelector("#exchange-rates");
+  container.replaceChildren();
+
+  for (const rate of rates) {
+    if (rate.code === "VND") {
+      continue;
+    }
+
+    const row = document.createElement("div");
+    row.className = "manage-row exchange-row";
+
+    const info = document.createElement("div");
+
+    const name = document.createElement("strong");
+    name.textContent = `1 ${rate.code} → VND`;
+
+    const detail = document.createElement("p");
+    const when = rate.updatedAt ? ` · ${rate.updatedAt}` : "";
+    detail.textContent = `${rate.source ?? "chưa có"}${when}`;
+
+    info.append(name, detail);
+
+    const actions = document.createElement("div");
+    actions.className = "manage-actions";
+
+    const input = document.createElement("input");
+    input.type = "number";
+    input.min = "0.000001";
+    input.step = "any";
+    input.value = rate.rateToVnd || "";
+    input.setAttribute("aria-label", `Tỷ giá ${rate.code}`);
+
+    const save = makeButton("Lưu", "button ghost small", async () => {
+      try {
+        const response = await fetch(`/exchange-rates/${rate.currencyId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ rateToVnd: Number(input.value) }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || "Không lưu được tỷ giá");
+        }
+
+        await loadAssetsTab();
+      } catch (err) {
+        window.alert(err.message);
+      }
+    });
+
+    actions.append(input, save);
+    row.append(info, actions);
+    container.append(row);
+  }
+
+  if (container.childElementCount === 0) {
+    container.append(
+      createEmptyState(
+        "Chưa có tiền tệ cần tỷ giá.",
+        "Chỉ cần tỷ giá cho các loại tiền khác VND."
+      )
+    );
+  }
+}
+
+document
+  .querySelector("#refresh-exchange-rates")
+  .addEventListener("click", async () => {
+    try {
+      const response = await fetch("/exchange-rates/refresh", {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Không lấy được tỷ giá");
+      }
+
+      await loadAssetsTab();
+    } catch (err) {
+      window.alert(err.message);
+    }
+  });
+
+document.querySelector("#refresh-assets").addEventListener("click", () => {
+  loadAssetsTab();
+});
+
+// ---- Savings goals ----
+
+async function loadGoals() {
+  const response = await fetch("/savings-goals?includeArchived=1");
+
+  if (!response.ok) {
+    throw new Error("Failed to load goals");
+  }
+
+  const goals = await response.json();
+
+  const container = document.querySelector("#goals");
+  container.replaceChildren();
+
+  if (goals.length === 0) {
+    const empty = createEmptyState(
+      "Chưa có mục tiêu nào.",
+      "Bấm “Tạo mục tiêu” để bắt đầu tiết kiệm có kế hoạch.",
+      "Tạo mục tiêu"
+    );
+
+    empty.querySelector("button").addEventListener("click", () => {
+      openGoalDialog();
+    });
+
+    container.append(empty);
+    return;
+  }
+
+  const contributions = await Promise.all(
+    goals.map((goal) =>
+      fetch(`/savings-goals/${goal.id}/contributions`)
+        .then((response) => (response.ok ? response.json() : []))
+        .catch(() => [])
+    )
+  );
+
+  goals.forEach((goal, index) => {
+    container.append(goalCard(goal, contributions[index]));
+  });
+}
+
+function goalCard(goal, contributions) {
+  const card = document.createElement("article");
+  card.className = "goal-card";
+
+  if (goal.isArchived) {
+    card.classList.add("archived");
+  }
+
+  const header = document.createElement("div");
+  header.className = "goal-header";
+
+  const titleWrap = document.createElement("div");
+
+  const title = document.createElement("h3");
+  title.className = "goal-title";
+  title.textContent = goal.name;
+
+  const subtitle = document.createElement("p");
+  subtitle.className = "goal-subtitle";
+  const percent = Math.round(goal.progress * 100);
+  subtitle.textContent = `${percent}%${
+    goal.deadline ? ` · hạn ${goal.deadline}` : ""
+  }`;
+
+  titleWrap.append(title, subtitle);
+
+  const actions = document.createElement("div");
+  actions.className = "goal-actions";
+
+  actions.append(
+    makeButton("Đóng góp", "button small", () =>
+      openContributionDialog(goal)
+    ),
+    makeButton("Sửa", "button ghost small", () => openGoalDialog(goal)),
+    makeButton("Xóa", "button danger small", async () => {
+      if (!window.confirm(`Xóa mục tiêu "${goal.name}"?`)) {
+        return;
+      }
+
+      try {
+        const response = await fetch(`/savings-goals/${goal.id}`, {
+          method: "DELETE",
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to delete goal");
+        }
+
+        await refreshAll();
+      } catch (err) {
+        console.error(err);
+      }
+    })
+  );
+
+  header.append(titleWrap, actions);
+
+  const progress = document.createElement("div");
+  progress.className = "goal-progress";
+
+  const bar = document.createElement("div");
+  bar.className = "goal-progress-bar";
+  bar.style.width = `${Math.min(100, percent)}%`;
+  progress.append(bar);
+
+  const meta = document.createElement("div");
+  meta.className = "goal-meta";
+
+  const left = document.createElement("span");
+  left.textContent = `${formatMoney(
+    goal.totalContributed,
+    goal.currency,
+    goal.decimalPlaces
+  )} / ${formatMoney(goal.targetAmount, goal.currency, goal.decimalPlaces)}`;
+
+  const right = document.createElement("span");
+  right.textContent =
+    goal.remaining > 0
+      ? `còn ${formatMoney(goal.remaining, goal.currency, goal.decimalPlaces)}`
+      : "Đã đạt";
+
+  meta.append(left, right);
+
+  card.append(header, progress, meta);
+
+  if (contributions.length > 0) {
+    const list = document.createElement("div");
+    list.className = "goal-contributions";
+
+    for (const contribution of contributions) {
+      const row = document.createElement("div");
+      row.className = "goal-contribution";
+
+      const label = document.createElement("span");
+      label.textContent = `${contribution.contributedAt}${
+        contribution.note ? ` · ${contribution.note}` : ""
+      }`;
+
+      const rightWrap = document.createElement("span");
+
+      const amount = document.createElement("span");
+      amount.textContent = formatMoney(
+        contribution.amount,
+        goal.currency,
+        goal.decimalPlaces
+      );
+
+      rightWrap.append(
+        amount,
+        makeButton("×", "button danger small", async () => {
+          try {
+            const response = await fetch(
+              `/savings-goals/contributions/${contribution.id}`,
+              { method: "DELETE" }
+            );
+
+            if (!response.ok) {
+              throw new Error("Failed to delete contribution");
+            }
+
+            await refreshAll();
+          } catch (err) {
+            console.error(err);
+          }
+        })
+      );
+
+      row.append(label, rightWrap);
+      list.append(row);
+    }
+
+    card.append(list);
+  }
+
+  return card;
+}
+
+function openGoalDialog(goal = null) {
+  editingGoalId = goal ? goal.id : null;
+
+  document.querySelector("#goal-form-title").textContent =
+    goal ? "Sửa mục tiêu" : "Thêm mục tiêu";
+
+  goalForm.reset();
+  document.querySelector("#goal-error").textContent = "";
+
+  if (goal) {
+    document.querySelector("#goal-name").value = goal.name;
+    document.querySelector("#goal-target").value = (
+      goal.targetAmount /
+      10 ** goal.decimalPlaces
+    ).toFixed(goal.decimalPlaces);
+    document.querySelector("#goal-currency").value = goal.currencyId;
+    document.querySelector("#goal-deadline").value = goal.deadline ?? "";
+    document.querySelector("#goal-archived").value = goal.isArchived ? "1" : "0";
+  } else {
+    document.querySelector("#goal-archived").value = "0";
+
+    const match = [...document.querySelector("#goal-currency").options].find(
+      (option) =>
+        currenciesById.get(Number(option.value))?.code === currencyFilter.value
+    );
+
+    if (match) {
+      document.querySelector("#goal-currency").value = match.value;
+    }
+  }
+
+  goalDialog.showModal();
+}
+
+document.querySelector("#add-goal").addEventListener("click", () => {
+  openGoalDialog();
+});
+
+document.querySelector("#cancel-goal").addEventListener("click", () => {
+  goalDialog.close();
+});
+
+goalForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  const currencyId = Number(document.querySelector("#goal-currency").value);
+  const currency = currenciesById.get(currencyId);
+  const decimalPlaces = currency ? currency.decimalPlaces : 2;
+
+  const goal = {
+    name: document.querySelector("#goal-name").value.trim(),
+    targetAmount: toMinors(
+      Number(document.querySelector("#goal-target").value),
+      decimalPlaces
+    ),
+    currencyId,
+    deadline: document.querySelector("#goal-deadline").value || null,
+    isArchived: document.querySelector("#goal-archived").value === "1",
+  };
+
+  try {
+    const url =
+      editingGoalId === null
+        ? "/savings-goals"
+        : `/savings-goals/${editingGoalId}`;
+
+    const method = editingGoalId === null ? "POST" : "PUT";
+
+    const response = await fetch(url, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(goal),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "Không lưu được mục tiêu");
+    }
+
+    goalDialog.close();
+    await refreshAll();
+  } catch (err) {
+    document.querySelector("#goal-error").textContent = err.message;
+  }
+});
+
+function openContributionDialog(goal) {
+  contributingGoal = goal;
+
+  contributionForm.reset();
+  document.querySelector("#contribution-error").textContent = "";
+  document.querySelector("#contribution-goal-info").textContent = `${
+    goal.name
+  } · mục tiêu ${formatMoney(
+    goal.targetAmount,
+    goal.currency,
+    goal.decimalPlaces
+  )}`;
+  document.querySelector("#contribution-date").value = getToday();
+
+  contributionDialog.showModal();
+}
+
+document.querySelector("#cancel-contribution").addEventListener("click", () => {
+  contributionDialog.close();
+});
+
+contributionForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  if (!contributingGoal) {
+    return;
+  }
+
+  const amount = toMinors(
+    Number(document.querySelector("#contribution-amount").value),
+    contributingGoal.decimalPlaces
+  );
+
+  try {
+    const response = await fetch(
+      `/savings-goals/${contributingGoal.id}/contributions`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount,
+          note: document.querySelector("#contribution-note").value.trim() || null,
+          contributedAt:
+            document.querySelector("#contribution-date").value || null,
+        }),
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "Không lưu được đóng góp");
+    }
+
+    contributionDialog.close();
+    contributingGoal = null;
+    await refreshAll();
+  } catch (err) {
+    document.querySelector("#contribution-error").textContent = err.message;
+  }
+});
+
+// ---- Transaction suggestions ----
+
+async function loadSuggestions() {
+  try {
+    const response = await fetch("/transactions");
+
+    if (!response.ok) {
+      throw new Error("Failed to load suggestions");
+    }
+
+    const transactions = await response.json();
+
+    const names = [
+      ...new Set(
+        transactions.map((transaction) => transaction.name).filter(Boolean)
+      ),
+    ].sort((a, b) => a.localeCompare(b, "vi"));
+
+    const datalist = document.querySelector("#transaction-name-options");
+    datalist.replaceChildren();
+
+    for (const name of names) {
+      const option = document.createElement("option");
+      option.value = name;
+      datalist.append(option);
+    }
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+// ---- Data export / import ----
+
+document.querySelector("#export-json").addEventListener("click", async () => {
+  try {
+    const response = await fetch("/backup");
+
+    if (!response.ok) {
+      throw new Error("Không xuất được dữ liệu");
+    }
+
+    const blob = new Blob([await response.text()], {
+      type: "application/json",
+    });
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `expense-backup-${getToday()}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    window.alert(err.message);
+  }
+});
+
+document.querySelector("#import-json").addEventListener("click", () => {
+  document.querySelector("#import-json-file").click();
+});
+
+document
+  .querySelector("#import-json-file")
+  .addEventListener("change", async (event) => {
+    const file = event.target.files[0];
+
+    if (!file) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Nhập dữ liệu sẽ thay thế TOÀN BỘ dữ liệu hiện tại. Tiếp tục?"
+    );
+
+    if (!confirmed) {
+      event.target.value = "";
+      return;
+    }
+
+    try {
+      const payload = JSON.parse(await file.text());
+
+      const response = await fetch("/backup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Không nhập được dữ liệu");
+      }
+
+      await refreshAll();
+      window.alert("Đã nhập dữ liệu.");
+    } catch (err) {
+      window.alert(err.message);
+    }
+
+    event.target.value = "";
+  });
+
 // ---- Filters ----
 
 monthFilter.addEventListener("change", () => {
@@ -1224,17 +2404,20 @@ document.querySelector("#transaction-filter-type").addEventListener("change", lo
 
 async function refreshAll() {
   await Promise.all([
-    loadCurrencies(),
-    loadAccounts(),
-    loadAccountOptions(),
-    loadCategories(),
-    loadTransactions(),
-    loadDashboard(),
-    loadAccountTransactions(),
-    loadTransfers(),
-    loadManageAccounts(),
-    loadManageCategories(),
-    loadManageCurrencies(),
+    safe(loadCurrencies),
+    safe(loadAccounts),
+    safe(loadAccountOptions),
+    safe(loadCategories),
+    safe(loadTransactions),
+    safe(loadDashboard),
+    safe(loadAccountTransactions),
+    safe(loadTransfers),
+    safe(loadManageAccounts),
+    safe(loadManageCategories),
+    safe(loadManageCurrencies),
+    safe(loadAssetsTab),
+    safe(loadGoals),
+    safe(loadSuggestions),
   ]);
 }
 
@@ -1247,19 +2430,23 @@ async function initialize() {
     await loadCurrencies();
 
     await Promise.all([
-      loadAccounts(),
-      loadAccountOptions(),
-      loadCategories(),
-      loadTransactions(),
-      loadDashboard(),
-      loadAccountTransactions(),
-      loadTransfers(),
-      loadManageAccounts(),
-      loadManageCategories(),
-      loadManageCurrencies(),
+      safe(loadAccounts),
+      safe(loadAccountOptions),
+      safe(loadCategories),
+      safe(loadTransactions),
+      safe(loadDashboard),
+      safe(loadAccountTransactions),
+      safe(loadTransfers),
+      safe(loadManageAccounts),
+      safe(loadManageCategories),
+      safe(loadManageCurrencies),
+      safe(loadAssetsTab),
+      safe(loadGoals),
+      safe(loadSuggestions),
     ]);
   } catch (err) {
     console.error(err);
+    showToast("Không khởi động được ứng dụng");
   }
 }
 

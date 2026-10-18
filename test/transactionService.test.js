@@ -9,6 +9,8 @@ import { get, run } from "../src/database.js";
 
 import {
   createTransaction,
+  getTransactionById,
+  getTransactions,
   updateTransaction,
   deleteTransaction,
 } from "../src/services/transactionService.js";
@@ -215,5 +217,126 @@ describe("deleteTransaction", () => {
     expect(accountAfter.balance).toBe(
       originalAccount.balance
     );
+  });
+
+  test("throws when deleting a missing transaction", async () => {
+    await expect(deleteTransaction(999999)).rejects.toMatchObject({
+      statusCode: 404,
+    });
+  });
+});
+
+describe("validation edge cases", () => {
+  const base = {
+    name: "Edge",
+    amount: 10,
+    type: "expense",
+    date: "2026-10-07",
+    categoryId: 1,
+    accountId: 1,
+  };
+
+  test("rejects a missing name", async () => {
+    await expect(
+      createTransaction({ ...base, name: "   " })
+    ).rejects.toThrow("Name is required");
+  });
+
+  test("rejects a zero amount", async () => {
+    await expect(
+      createTransaction({ ...base, amount: 0 })
+    ).rejects.toThrow("Amount must be greater than 0");
+  });
+
+  test("rejects an unknown type", async () => {
+    await expect(
+      createTransaction({ ...base, type: "transfer" })
+    ).rejects.toThrow("Type must be income or expense");
+  });
+
+  test("rejects a missing date", async () => {
+    await expect(
+      createTransaction({ ...base, date: "" })
+    ).rejects.toThrow("Date is required");
+  });
+
+  test("rejects a missing category", async () => {
+    await expect(
+      createTransaction({ ...base, categoryId: 0 })
+    ).rejects.toThrow("Category is required");
+  });
+
+  test("rejects a missing account", async () => {
+    await expect(
+      createTransaction({ ...base, accountId: 0 })
+    ).rejects.toThrow("Account is required");
+  });
+
+  test("throws when updating a missing transaction", async () => {
+    await expect(
+      updateTransaction(999999, base)
+    ).rejects.toMatchObject({ statusCode: 404 });
+  });
+});
+
+describe("getTransactions filters", () => {
+  test("returns all transactions without filters", async () => {
+    const transactions = await getTransactions();
+
+    expect(transactions.length).toBeGreaterThan(0);
+  });
+
+  test("filters by type", async () => {
+    const income = await getTransactions({ type: "income" });
+
+    expect(income.length).toBeGreaterThan(0);
+    expect(income.every((item) => item.type === "income")).toBe(true);
+  });
+
+  test("filters by category", async () => {
+    const food = await getTransactions({ categoryId: 1 });
+
+    expect(food.length).toBeGreaterThan(0);
+    expect(food.every((item) => item.categoryId === 1)).toBe(true);
+  });
+
+  test("filters by account", async () => {
+    const rows = await getTransactions({ accountId: 2 });
+
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.every((item) => item.accountId === 2)).toBe(true);
+  });
+
+  test("filters by date range", async () => {
+    const october = await getTransactions({
+      start: "2026-10-01",
+      end: "2026-11-01",
+    });
+
+    expect(october.length).toBeGreaterThan(0);
+    expect(
+      october.every(
+        (item) => item.date >= "2026-10-01" && item.date < "2026-11-01"
+      )
+    ).toBe(true);
+  });
+});
+
+describe("getTransactionById", () => {
+  test("returns a joined transaction with currency info", async () => {
+    const created = await createTransaction({
+      name: "Joined",
+      amount: 12,
+      type: "expense",
+      date: "2026-10-07",
+      categoryId: 1,
+      accountId: 1,
+    });
+
+    const found = await getTransactionById(created.id);
+
+    expect(found.name).toBe("Joined");
+    expect(found.category).toBe("Food");
+    expect(found.currency).toBe("USD");
   });
 });

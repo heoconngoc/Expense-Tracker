@@ -19,11 +19,16 @@ router.get("/", async (req, res, next) => {
       ? Number(req.query.accountId)
       : undefined;
 
+    const months = req.query.months
+      ? Number(req.query.months)
+      : undefined;
+
     const dashboard = await getDashboard({
       start,
       end,
       currency,
       accountId,
+      months,
     });
 
     res.json(dashboard);

@@ -14,6 +14,14 @@ INSERT INTO app_settings
   (id, base_currency_id)
   VALUES (1, 1);
 
+-- Rates used to value assets in VND. rate_to_vnd is in micro units.
+-- VND is 1:1; the USD value is a sensible starting point the user can edit.
+INSERT INTO exchange_rates (currency_id, rate_to_vnd, source)
+  VALUES (2, 1000000, 'manual');
+
+INSERT INTO exchange_rates (currency_id, rate_to_vnd, source)
+  VALUES (1, 26000000000, 'manual');
+
 INSERT INTO categories
   (name)
   VALUES ('Food');

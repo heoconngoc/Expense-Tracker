@@ -15,6 +15,10 @@ export async function resetDatabase() {
   await exec(`
     PRAGMA foreign_keys = OFF;
 
+    DROP TABLE IF EXISTS savings_contributions;
+    DROP TABLE IF EXISTS savings_goals;
+    DROP TABLE IF EXISTS gold_holdings;
+    DROP TABLE IF EXISTS exchange_rates;
     DROP TABLE IF EXISTS app_settings;
     DROP TABLE IF EXISTS transfers;
     DROP TABLE IF EXISTS transactions;

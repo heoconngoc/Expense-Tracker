@@ -3,9 +3,16 @@
 
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#faf6ef">
 
-  <title>Expense Tracker</title>
+  <title>Sổ tay tài chính</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..700&family=Inter:wght@400..700&display=swap"
+    rel="stylesheet">
 
   <link rel="stylesheet" href="/styles.css">
 </head>
@@ -14,14 +21,16 @@
   <header class="app-header">
     <div class="container header-inner">
       <div class="brand">
-        <p class="eyebrow">Personal Finance</p>
-        <h1>Expense Tracker</h1>
+        <p class="eyebrow">Tài chính cá nhân</p>
+        <h1>Sổ tay tài chính</h1>
       </div>
 
       <nav class="nav-tabs">
         <button type="button" class="tab active" data-tab="dashboard">Tổng quan</button>
         <button type="button" class="tab" data-tab="transactions">Giao dịch</button>
         <button type="button" class="tab" data-tab="transfers">Chuyển khoản</button>
+        <button type="button" class="tab" data-tab="assets">Tài sản</button>
+        <button type="button" class="tab" data-tab="goals">Mục tiêu</button>
         <button type="button" class="tab" data-tab="settings">Quản lý</button>
       </nav>
     </div>
@@ -35,7 +44,8 @@
 
         <label>
           Tên
-          <input id="transaction-name" type="text" required>
+          <input id="transaction-name" type="text" list="transaction-name-options" required>
+          <datalist id="transaction-name-options"></datalist>
         </label>
 
         <label>
@@ -175,6 +185,15 @@
           <select id="account-currency" required></select>
         </label>
 
+        <label>
+          Loại tài khoản
+          <select id="account-type">
+            <option value="spending">Chi tiêu</option>
+            <option value="savings">Tiết kiệm</option>
+            <option value="gold">Vàng</option>
+          </select>
+        </label>
+
         <div id="account-balance-field">
           <label>
             Số dư ban đầu
@@ -278,6 +297,132 @@
       </form>
     </dialog>
 
+    <dialog id="gold-holding-dialog">
+      <form id="gold-holding-form" class="dialog-form">
+        <h2 id="gold-holding-form-title">Thêm vàng</h2>
+
+        <label>
+          Tài khoản vàng
+          <select id="gold-holding-account" required></select>
+        </label>
+
+        <label>
+          Số lượng
+          <input id="gold-holding-quantity" type="number" min="0.001" step="any" required>
+        </label>
+
+        <label>
+          Đơn vị
+          <select id="gold-holding-unit">
+            <option value="luong">Lượng</option>
+            <option value="chi">Chỉ</option>
+          </select>
+        </label>
+
+        <label>
+          Ghi chú
+          <input id="gold-holding-note" type="text" placeholder="Ví dụ: vàng lưu ký">
+        </label>
+
+        <p id="gold-holding-error" class="form-error"></p>
+
+        <div class="form-actions">
+          <button type="button" id="cancel-gold-holding" class="button ghost">Hủy</button>
+          <button type="submit" class="button">Lưu</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="gold-price-dialog">
+      <form id="gold-price-form" class="dialog-form">
+        <h2>Nhập giá vàng</h2>
+        <p class="muted">Giá SJC theo VND cho 1 lượng. Dùng khi không lấy được giá tự động.</p>
+
+        <label>
+          Giá vàng (VND/lượng)
+          <input id="gold-price-input" type="number" min="1" step="1" required>
+        </label>
+
+        <p id="gold-price-error" class="form-error"></p>
+
+        <div class="form-actions">
+          <button type="button" id="cancel-gold-price" class="button ghost">Hủy</button>
+          <button type="button" id="clear-gold-price" class="button ghost">Bỏ giá tay</button>
+          <button type="submit" class="button">Lưu</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="goal-dialog">
+      <form id="goal-form" class="dialog-form">
+        <h2 id="goal-form-title">Thêm mục tiêu</h2>
+
+        <label>
+          Tên mục tiêu
+          <input id="goal-name" type="text" required>
+        </label>
+
+        <label>
+          Số tiền mục tiêu
+          <input id="goal-target" type="number" min="0.01" step="any" required>
+        </label>
+
+        <label>
+          Tiền tệ
+          <select id="goal-currency" required></select>
+        </label>
+
+        <label>
+          Hạn (không bắt buộc)
+          <input id="goal-deadline" type="date">
+        </label>
+
+        <label>
+          Trạng thái
+          <select id="goal-archived">
+            <option value="0">Đang thực hiện</option>
+            <option value="1">Đã lưu trữ</option>
+          </select>
+        </label>
+
+        <p id="goal-error" class="form-error"></p>
+
+        <div class="form-actions">
+          <button type="button" id="cancel-goal" class="button ghost">Hủy</button>
+          <button type="submit" class="button">Lưu</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="contribution-dialog">
+      <form id="contribution-form" class="dialog-form">
+        <h2>Ghi nhận đóng góp</h2>
+        <p id="contribution-goal-info" class="muted"></p>
+
+        <label>
+          Số tiền
+          <input id="contribution-amount" type="number" min="0.01" step="any" required>
+        </label>
+
+        <label>
+          Ngày
+          <input id="contribution-date" type="date" required>
+        </label>
+
+        <label>
+          Ghi chú
+          <input id="contribution-note" type="text">
+        </label>
+
+        <p id="contribution-error" class="form-error"></p>
+
+        <div class="form-actions">
+          <button type="button" id="cancel-contribution" class="button ghost">Hủy</button>
+          <button type="submit" class="button">Lưu</button>
+        </div>
+      </form>
+    </dialog>
+
     <section id="tab-dashboard" class="tab-panel active">
       <div class="section-header">
         <div>
@@ -311,6 +456,28 @@
         <article class="card summary-card">
           <p>Chênh lệch</p>
           <strong id="net">$0.00</strong>
+        </article>
+      </div>
+
+      <article class="card hero-card">
+        <p class="eyebrow">Tổng tài sản</p>
+        <strong id="total-assets" class="hero-value">—</strong>
+        <div id="assets-breakdown" class="asset-breakdown"></div>
+      </article>
+
+      <div class="charts-grid">
+        <article class="card chart-card">
+          <h3>Chi tiêu 6 tháng</h3>
+          <div class="chart-box">
+            <canvas id="trend-chart"></canvas>
+          </div>
+        </article>
+
+        <article class="card chart-card">
+          <h3>Chi tiêu theo danh mục</h3>
+          <div class="chart-box">
+            <canvas id="category-chart"></canvas>
+          </div>
         </article>
       </div>
 
@@ -372,6 +539,74 @@
       <div id="transfers"></div>
     </section>
 
+    <section id="tab-assets" class="tab-panel">
+      <div class="section-header">
+        <div>
+          <h2>Tài sản</h2>
+          <p class="muted">Toàn bộ tài sản quy về VND.</p>
+        </div>
+
+        <button type="button" class="button outline" id="refresh-assets">Làm mới</button>
+      </div>
+
+      <article class="card hero-card">
+        <p class="eyebrow">Tổng tài sản</p>
+        <strong id="assets-total" class="hero-value">—</strong>
+        <div id="assets-groups-summary" class="asset-breakdown"></div>
+      </article>
+
+      <article class="card gold-price-card">
+        <div>
+          <p class="eyebrow">Giá vàng SJC</p>
+          <strong id="gold-price-value">—</strong>
+          <p id="gold-price-meta" class="muted"></p>
+        </div>
+
+        <div class="gold-price-actions">
+          <button type="button" class="button ghost small" id="refresh-gold-price">Cập nhật</button>
+          <button type="button" class="button ghost small" id="edit-gold-price">Nhập tay</button>
+        </div>
+      </article>
+
+      <div class="section-header">
+        <div>
+          <h2>Vàng đang giữ</h2>
+        </div>
+
+        <button type="button" class="button outline" id="add-gold-holding">+ Vàng</button>
+      </div>
+      <div id="gold-holdings"></div>
+
+      <div class="section-header">
+        <div>
+          <h2>Theo loại tài khoản</h2>
+        </div>
+      </div>
+      <div id="asset-accounts"></div>
+
+      <div class="section-header">
+        <div>
+          <h2>Tỷ giá quy về VND</h2>
+          <p class="muted">Sửa tỷ giá trực tiếp, hoặc cập nhật từ internet.</p>
+        </div>
+
+        <button type="button" class="button outline" id="refresh-exchange-rates">Cập nhật</button>
+      </div>
+      <div id="exchange-rates"></div>
+    </section>
+
+    <section id="tab-goals" class="tab-panel">
+      <div class="section-header">
+        <div>
+          <h2>Mục tiêu tiết kiệm</h2>
+        </div>
+
+        <button type="button" class="button" id="add-goal">+ Mục tiêu</button>
+      </div>
+
+      <div id="goals"></div>
+    </section>
+
     <section id="tab-settings" class="tab-panel">
       <div class="section-header">
         <div>
@@ -399,10 +634,32 @@
         <button type="button" class="button outline" data-action="add-currency">+ Tiền tệ</button>
       </div>
       <div id="manage-currencies" class="manage-list"></div>
+
+      <div class="section-header">
+        <div>
+          <h2>Dữ liệu</h2>
+          <p class="muted">Sao lưu toàn bộ dữ liệu ra file JSON, hoặc khôi phục lại từ file.</p>
+        </div>
+      </div>
+
+      <div class="manage-list">
+        <div class="manage-row">
+          <div>
+            <strong>Xuất / Nhập JSON</strong>
+            <p>File sao lưu chứa toàn bộ tài khoản, giao dịch, chuyển khoản, vàng và mục tiêu.</p>
+          </div>
+          <div class="manage-actions">
+            <button type="button" class="button ghost small" id="export-json">Xuất</button>
+            <button type="button" class="button ghost small" id="import-json">Nhập</button>
+            <input type="file" id="import-json-file" accept="application/json,.json" hidden>
+          </div>
+        </div>
+      </div>
     </section>
 
   </main>
 
+  <script src="/vendor/chart.js"></script>
   <script type="module" src="/app.js"></script>
 </body>
 

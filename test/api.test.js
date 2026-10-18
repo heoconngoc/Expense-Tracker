@@ -234,3 +234,12 @@ describe("Dashboard API", () => {
     expect(response.status).toBe(400);
   });
 });
+
+describe("Chart.js vendor asset", () => {
+  test("GET /vendor/chart.js serves the local Chart.js bundle", async () => {
+    const response = await request(app).get("/vendor/chart.js");
+
+    expect(response.status).toBe(200);
+    expect(response.text).toContain("Chart");
+  });
+});

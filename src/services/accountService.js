@@ -1,6 +1,17 @@
 import { all, get, run, withTransaction } from "../database.js";
 import AppError from "../errors/AppError.js";
 
+const ACCOUNT_TYPES = ["spending", "savings", "gold"];
+
+function assertType(type) {
+  if (!ACCOUNT_TYPES.includes(type)) {
+    throw new AppError(
+      "type must be spending, savings, or gold",
+      400
+    );
+  }
+}
+
 function isUniqueViolation(err) {
   const code = err?.code ?? "";
   const isConstraint = code === "SQLITE_CONSTRAINT_UNIQUE";
@@ -35,6 +46,7 @@ async function getAccountById(id) {
         a.name,
         a.balance,
         a.currency_id AS currencyId,
+        a.type,
         a.is_active AS isActive,
         c.code AS currency,
         c.symbol,
@@ -55,6 +67,7 @@ export async function getAccounts({ activeOnly = false } = {}) {
       a.name,
       a.balance,
       a.currency_id AS currencyId,
+      a.type,
       a.is_active AS isActive,
       c.code AS currency,
       c.symbol,
@@ -77,6 +90,7 @@ export async function createAccount({
   name,
   currencyId,
   initialBalance = 0,
+  type = "spending",
 }) {
   if (!name?.trim()) {
     throw new AppError("Name is required", 400);
@@ -93,16 +107,18 @@ export async function createAccount({
     );
   }
 
+  assertType(type);
+
   return withTransaction(async () => {
     await assertCurrencyActive(currencyId);
 
     try {
       const result = await run(
         `
-          INSERT INTO accounts (name, currency_id, balance)
-          VALUES (?, ?, ?)
+          INSERT INTO accounts (name, currency_id, balance, type)
+          VALUES (?, ?, ?, ?)
         `,
-        [name.trim(), currencyId, initialBalance]
+        [name.trim(), currencyId, initialBalance, type]
       );
 
       return getAccountById(result.lastID);
@@ -116,7 +132,10 @@ export async function createAccount({
   });
 }
 
-export async function updateAccount(id, { name, currencyId, isActive }) {
+export async function updateAccount(
+  id,
+  { name, currencyId, isActive, type }
+) {
   return withTransaction(async () => {
     const account = await get(
       "SELECT * FROM accounts WHERE id = ?",
@@ -129,12 +148,15 @@ export async function updateAccount(id, { name, currencyId, isActive }) {
 
     const nextName = name?.trim() || account.name;
     const nextCurrencyId = currencyId ?? account.currency_id;
+    const nextType = type ?? account.type;
     const nextActive =
       isActive === undefined
         ? account.is_active
         : isActive
           ? 1
           : 0;
+
+    assertType(nextType);
 
     if (nextCurrencyId !== account.currency_id) {
       const transactionCount = await get(
@@ -165,10 +187,10 @@ export async function updateAccount(id, { name, currencyId, isActive }) {
       await run(
         `
           UPDATE accounts
-          SET name = ?, currency_id = ?, is_active = ?
+          SET name = ?, currency_id = ?, is_active = ?, type = ?
           WHERE id = ?
         `,
-        [nextName, nextCurrencyId, nextActive, id]
+        [nextName, nextCurrencyId, nextActive, nextType, id]
       );
     } catch (err) {
       if (isUniqueViolation(err)) {
