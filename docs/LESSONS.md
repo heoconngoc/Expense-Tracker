@@ -956,6 +956,30 @@ lọc `conclusion == 'success' && head_branch == 'main'`. Lợi ích: không l�
 test, không deploy nhầm từ `develop`/PR. Dùng `rsync` native + `ssh` (không cần
 action bên thứ ba) nên hợp cả repo private.
 
+### 5.6 Lockfile sinh trên macOS thiếu optional deps của Linux
+
+CI fail ở `npm ci` với `npm error code EUSAGE ... Missing: @emnapi/core@1.11.3
+from lock file`. Nguyên nhân: lockfile được `npm install` **trên macOS** — npm
+11.x chỉ ghi optional deps của **platform hiện tại** (darwin-arm64), bỏ hết biến
+thể `@parcel/watcher-*`, `@unrs/resolver-binding-*`, `@emnapi/*` cho linux/win32/
+android. Trên CI (linux-x64) `npm ci` cần các entry đó → báo "Missing from lock".
+
+Thêm 2 package làm devDep chỉ chữa được `@emnapi` nhưng vẫn fail tiếp vì thiếu
+`@parcel/watcher`... Giải pháp dứt điểm:
+
+- **Sinh `package-lock.json` trong môi trường Linux** (khớp CI), không phải macOS.
+  Dùng Docker: `docker run --rm -v "$PWD":/app -w /app node:24 sh -c "rm -f
+  package-lock.json && npm install --package-lock-only"` rồi copy lock về repo.
+- Lock sinh trên Linux ghi đủ **mọi** platform (android/darwin/freebsd/linux/win32).
+- Verify bằng đúng môi trường CI trước khi push: image `ubuntu:24.04` + Node 24
+  (`npm ci && npm test`). Container `node:24` (Debian bookworm, glibc 2.36) sẽ
+  fail sqlite3 vì prebuilt cần glibc 2.38 — đừng nhầm đó là lỗi code; `ubuntu:24.04`
+  (glibc 2.39) mới giống `ubuntu-latest`.
+
+**Quy tắc rút ra**: sau khi thêm/bớt dependency, đừng tin `npm ci` trên máy local
+macOS. Chạy verify trong container Linux giống CI, nhất là khi lockfile được tạo
+bằng `--package-lock-only`.
+
 ### Điểm dừng Phase 5
 
 - [x] `ecosystem.config.cjs` (pm2, env production, DB + BACKUP ở `/var/lib`)
