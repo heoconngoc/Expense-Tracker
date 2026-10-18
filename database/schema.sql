@@ -62,7 +62,7 @@ CREATE TABLE transfers (
 );
 
 -- Gold holdings are measured in thousandths of the chosen unit so the
--- quantity stays exact (no floating point). Example: 1.5 luong = 15000.
+-- quantity stays exact (no floating point). Example: 1.5 luong = 1500.
 -- 1 luong = 10 chi. Value in VND = quantity / 1000 * price per unit.
 CREATE TABLE gold_holdings (
   id INTEGER PRIMARY KEY,

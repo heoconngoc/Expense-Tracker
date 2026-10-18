@@ -23,14 +23,19 @@ The frontend is built with HTML, CSS, and vanilla JavaScript.
 
 It communicates with the backend through the REST API using `fetch()`.
 
-The UI is organized into four tabs so the user does not have to scroll
+The UI is organized into six tabs so the user does not have to scroll
 through the whole application at once:
 
-- **Overview** – summary cards (month/currency filters), clickable
-  account cards, and the selected account's transactions
-- **Transactions** – full list with account and type filters
+- **Overview** – total assets hero, 6-month spending bar chart, and
+  per-category donut, with month/currency filters and clickable account cards
+- **Transactions** – full list with type/category/account/date filters and a
+  name datalist
 - **Transfers** – list plus create/complete flows
-- **Management** – manage accounts, categories, and currencies
+- **Assets** – accounts grouped by type, gold holdings, live gold price with
+  manual fallback, and an editable exchange-rate table
+- **Goals** – savings goals with a progress bar and contributions
+- **Management** – manage accounts, categories, currencies, and JSON
+  export/import
 
 Clicking an account card selects it, switches the summary currency to
 the account's currency, scopes the dashboard totals to that account,
@@ -44,16 +49,23 @@ The frontend supports:
 - Creating, updating, and deleting transactions
 - Creating and completing transfers
 - Managing accounts, categories, and currencies
+- Viewing total assets in VND and gold holdings
+- Tracking savings goals and contributions
+- Exporting and importing the whole book as JSON
 
 Dialogs are rendered natively with `<dialog>` elements and forms are
-submitted with `fetch()`.
+submitted with `fetch()`. Chart.js is loaded from the app itself
+(`GET /vendor/chart.js`, served from `node_modules`) rather than a CDN, so
+charts never depend on external network access.
 
 ## Startup
 
 The server calls `initializeDatabase()` before listening. If the
 `accounts` table is missing, it creates the schema and applies
 `seed-reference.sql` (currencies, categories, app settings only). The
-book starts empty.
+book starts empty. On later runs it applies any pending files in
+`database/migrations/`, tracked in a `schema_migrations` table, after
+copying a safety backup of the database.
 
 ## Routes
 
@@ -69,6 +81,12 @@ Account, category, and currency routes expose `GET /`, `POST /`, and
 cannot change their code or `decimal_places` after creation, and an
 account's currency cannot change once it has history.
 
+Feature routes add assets (`/assets`), gold holdings (`/gold-holdings`),
+gold prices (`/gold-prices`), exchange rates (`/exchange-rates`), savings
+goals (`/savings-goals`), settings (`/settings`), and JSON backup
+(`/backup`). Chart.js is served from `/vendor/chart.js` straight out of
+`node_modules`.
+
 ## Services
 
 The service layer contains the application's business logic.
@@ -82,6 +100,11 @@ Examples include:
 - Performing transfers between accounts
 - Validating active accounts and categories
 - Creating, renaming, and archiving accounts, categories, and currencies
+- Aggregating total assets in VND from accounts and gold holdings
+- Fetching and caching the gold price (API → manual entry → cached value)
+- Fetching and storing exchange rates
+- Managing savings goals and their contributions
+- Exporting and restoring the whole book as JSON
 
 Operations that modify multiple pieces of related data use SQLite
 transactions to maintain consistency.
