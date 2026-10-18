@@ -91,7 +91,7 @@ sudo rm -f /etc/nginx/sites-enabled/default
 ### 7.3. Tạo user/mật khẩu đăng nhập (trên VM)
 
 ```bash
-sudo htpasswd -c /etc/nginx/.htpasswd yourname
+sudo htpasswd -c /etc/nginx/.htpasswd datpham
 ```
 
 Thay `yourname` bằng tên bạn muốn; sẽ hỏi mật khẩu 2 lần.
