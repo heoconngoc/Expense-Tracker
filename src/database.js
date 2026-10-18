@@ -17,6 +17,10 @@ const REFERENCE_SEED_PATH = path.join(
   __dirname,
   "../database/seed-reference.sql"
 );
+const SAMPLE_SEED_PATH = path.join(
+  __dirname,
+  "../database/seed.sql"
+);
 const MIGRATIONS_DIR = path.join(
   __dirname,
   "../database/migrations"
@@ -52,13 +56,13 @@ export async function initializeDatabase() {
   }
 
   const schema = fs.readFileSync(SCHEMA_PATH, "utf8");
-  const referenceSeed = fs.readFileSync(
-    REFERENCE_SEED_PATH,
-    "utf8"
-  );
+  const seedPath = process.env.SEED_SAMPLE
+    ? SAMPLE_SEED_PATH
+    : REFERENCE_SEED_PATH;
+  const seed = fs.readFileSync(seedPath, "utf8");
 
   await exec(schema);
-  await exec(referenceSeed);
+  await exec(seed);
 
   return true;
 }

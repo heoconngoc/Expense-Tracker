@@ -14,5 +14,19 @@ module.exports = {
         BACKUP_DIR: "/var/lib/expense-tracker/backups",
       },
     },
+    {
+      name: "expense-tracker-demo",
+      script: "src/server.js",
+      cwd: __dirname,
+      instances: 1,
+      autorestart: true,
+      max_memory_restart: "300M",
+      env_production: {
+        NODE_ENV: "production",
+        PORT: 3001,
+        DB_PATH: "/var/lib/expense-tracker/demo.db",
+        SEED_SAMPLE: "1",
+      },
+    },
   ],
 };

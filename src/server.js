@@ -11,7 +11,9 @@ async function start() {
 
   if (initialized) {
     console.log(
-      "Database initialized with reference data only (currencies and categories)."
+      process.env.SEED_SAMPLE
+        ? "Database initialized with sample data (demo mode)."
+        : "Database initialized with reference data only (currencies and categories)."
     );
   }
 
