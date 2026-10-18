@@ -1,16 +1,11 @@
-const CHART_JS_URL =
-  "https://cdn.jsdelivr.net/npm/chart.js@4.4.1/+esm";
-
-let chartJsPromise = null;
-
-function loadChartJs() {
-  if (!chartJsPromise) {
-    chartJsPromise = import(CHART_JS_URL).then(
-      (module) => module.Chart ?? module.default
-    );
+async function loadChartJs() {
+  if (window.Chart) {
+    return window.Chart;
   }
 
-  return chartJsPromise;
+  throw new Error(
+    "Chart.js chưa được nạp. Kiểm tra /vendor/chart.js."
+  );
 }
 
 const PALETTE = [

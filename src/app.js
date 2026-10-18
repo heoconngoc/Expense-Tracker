@@ -1,4 +1,6 @@
 import express from "express";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import transactionRoutes from "./routes/transactions.js";
 import transferRoutes from "./routes/transfers.js";
@@ -18,6 +20,19 @@ const app = express();
 
 app.use(express.json({ limit: "10mb" }));
 app.use(express.static("public"));
+
+const chartJsFile = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "node_modules",
+  "chart.js",
+  "dist",
+  "chart.umd.js"
+);
+
+app.get("/vendor/chart.js", (req, res) => {
+  res.sendFile(chartJsFile);
+});
 
 app.use("/transactions", transactionRoutes);
 app.use("/transfers", transferRoutes);
