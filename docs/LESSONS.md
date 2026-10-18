@@ -862,13 +862,29 @@ người dùng chỉ thấy khung trống và tưởng app hỏng. Fix: 1 toast 
 trong chính chỗ canvas. Nguyên tắc: **lỗi tải dữ liệu luôn có phản hồi thị
 giác**, không chỉ log console.
 
-### 4.4 Fallback cho tài nguyên ngoài (CDN)
+### 4.4 Fallback cho tài nguyên ngoài (CDN) — và vì sao nên bỏ CDN
 
 Chart.js tải qua CDN có thể fail (offline, chặn mạng). Phải bọc riêng từng chart
 trong `try/catch` để 1 chart lỗi không kéo đổ chart kia, và thay canvas bằng
 `.chart-fallback` có thông báo. Không để `await` CDN làm sập cả `renderCharts`.
 
-### 4.5 Bug do tiến trình server cũ (nhắc lại lần 2)
+### 4.6 Đừng bắt người dùng phụ thuộc CDN cho thứ app luôn cần
+
+Bài học thật: user **đang có internet** nhưng vẫn thấy báo lỗi "cần internet" →
+vì `import("https://cdn.jsdelivr.net/...")` bị chặn ở phía họ (ad-blocker, DNS,
+ISP VN chặn jsDelivr). Tài nguyên *thiết yếu* (thư viện vẽ chart) không nên phụ
+thuộc mạng ngoài:
+
+- Cài `chart.js` vào `dependencies` (pin đúng version).
+- Phục vụ qua chính server: `GET /vendor/chart.js` → `res.sendFile` từ
+  `node_modules/chart.js/dist/chart.umd.js`.
+- Nạp bằng thẻ `<script src="/vendor/chart.js">` (chạy sync, trước module `app.js`);
+  `charts.js` đọc global `window.Chart`.
+
+**Bài học phụ**: thông báo lỗi phải nói **lỗi thật**, đừng đoán mò "cần internet".
+Wave tay đổ lỗi sai chỗ làm việc debug lệch hướng. Khi cần, in luôn `err.message`.
+
+### 4.7 Bug do tiến trình server cũ (nhắc lại lần 2)
 
 User báo "chưa thấy chart" dù code đã có. Nguyên nhân hàng đầu vẫn là **tiến
 trình `node` cũ giữ cổng** phục vụ bundle cũ, hoặc **cache trình duyệt**. Trước
@@ -878,18 +894,20 @@ hàm mới không) và yêu cầu hard refresh. Tránh sửa code khi lỗi ch�
 ### Điểm dừng Phase 4
 
 - [x] Toast lỗi tiếng Việt dùng chung (`showToast`) + helper `safe(task)`
-- [x] Fallback chart khi CDN lỗi (`.chart-fallback`, bọc riêng từng chart)
+- [x] Fallback chart (`.chart-fallback`, bọc riêng từng chart) + hiện `err.message`
+- [x] Chart.js phục vụ nội bộ qua `GET /vendor/chart.js`, bỏ phụ thuộc CDN
 - [x] `npm run test:coverage` + threshold 80/70/80/80 trong `package.json`
 - [x] Edge-case tests: validation giao dịch, filter, update/delete 404, chuyển
       khoản (thiếu tài khoản, tỷ giá ≤ 0, status lạ, thiếu ngày/số nhận, số dư
-      không đủ khi hoàn tất), `getTransfers`/`getTransferById`
-- [x] 143 test xanh; all files 93.29% stmts / 81.26% branch / 100% funcs / 93.24% lines
+      không đủ khi hoàn tất), `getTransfers`/`getTransferById`, route vendor chart
+- [x] 144 test xanh; all files 93.29% stmts / 81.26% branch / 100% funcs / 93.24% lines
 - [x] `docs/QA-CHECKLIST.md` cho kiểm tra tay mobile + desktop
 
 **Tự kiểm tra hiểu bài**:
 1. Vì sao `coverageThreshold` không chặn `npm test` mà chỉ chặn `test:coverage`?
 2. Nhìn cột `Uncovered Line #s` để chọn test nhanh hơn "đoán mù" như thế nào?
 3. Vì sao bọc riêng từng chart trong `try/catch` thay vì bọc chung `renderCharts`?
-4. Khi user báo UI không đổi, vì sao phải kiểm tra tiến trình server + cache
+4. Vì sao không nên để thư viện thiết yếu phụ thuộc CDN ngoài?
+5. Khi user báo UI không đổi, vì sao phải kiểm tra tiến trình server + cache
    trước khi sửa code?
 

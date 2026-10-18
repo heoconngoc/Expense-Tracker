@@ -13,7 +13,7 @@ DB_PATH=/tmp/smoke.db npm start
 
 Mở trình duyệt, **hard refresh** (Cmd/Ctrl + Shift + R) để chắc chắn không dùng
 cache cũ. Nếu vẫn thấy giao diện cũ, kiểm tra còn tiến trình `node` cũ giữ cổng
-không (`lsof -nP -iTCP:4010 -sTCP:LISTEN`).
+không (`lsof -nP -iTCP:3000 -sTCP:LISTEN` — cổng mặc định, hoặc `$PORT`).
 
 ## 0. Khởi động & lỗi nền
 
@@ -34,8 +34,9 @@ không (`lsof -nP -iTCP:4010 -sTCP:LISTEN`).
 - [ ] Biểu đồ cột 6 tháng vẽ ra (không trống, không chồng nhãn)
 - [ ] Biểu đồ tròn theo danh mục vẽ ra, có chú thích
 - [ ] Đổi tháng ở bộ lọc → số liệu + biểu đồ cập nhật
-- [ ] **Tắt mạng rồi tải lại** → biểu đồ hiện `.chart-fallback` với câu tiếng Việt
-      ("Không tải được biểu đồ. Cần internet..."), không có khung trống câm
+- [ ] Biểu đồ luôn vẽ được (Chart.js phục vụ nội bộ, không cần internet)
+- [ ] Nếu buộc phải lỗi biểu đồ, `.chart-fallback` hiện **thông báo lỗi thật**
+      (`Không vẽ được biểu đồ: ...`), không có khung trống câm
 
 ## 3. Giao dịch
 

@@ -189,7 +189,8 @@ behavior (test cũ không sửa, trừ khi cần thêm field). ✅ 112 test xanh
 - [x] Module vàng frontend: fetch `/gold-prices/current`, fallback form nhập tay
 - [x] Xuất/nhập JSON trong tab Quản lý (backup/restore toàn bộ) — thêm backend
   `GET /backup` + `POST /backup` (ghi trong transaction, rollback nếu lỗi)
-- [x] Chart.js qua CDN, lazy-load chỉ khi mở tab có biểu đồ
+- [x] Chart.js phục vụ từ chính server (`/vendor/chart.js`), không phụ thuộc CDN
+  (xem ghi chú lệch kế hoạch bên dưới)
 - [x] Account dialog có thêm trường **Loại tài khoản** (chi tiêu/tiết kiệm/vàng)
 
 **Ghi chú lệch kế hoạch (đã chốt khi làm)**:
@@ -198,6 +199,12 @@ behavior (test cũ không sửa, trừ khi cần thêm field). ✅ 112 test xanh
 - JSON restore là thao tác nguy hiểm (ghi đè) → có confirm ở frontend; backend
   xoá + chèn lại trong 1 transaction, an toàn foreign key.
 - Giới hạn body `express.json` nâng lên 10mb để nhập file backup lớn.
+- **Chart.js chuyển từ CDN sang phục vụ nội bộ**: ban đầu lazy-load qua
+  `https://cdn.jsdelivr.net/npm/chart.js@4.4.1/+esm`. Nhưng khi user bật ad-blocker
+  / ISP chặn jsDelivr, biểu đồ không vẽ mà không rõ lý do. Thay bằng `chart.js`
+  trong `dependencies` + route `GET /vendor/chart.js` (`res.sendFile` từ
+  `node_modules/chart.js/dist/chart.umd.js`), nạp bằng `<script src="/vendor/chart.js">`
+  trước module `app.js`. `charts.js` dùng global `window.Chart`.
 
 **Điều kiện hoàn thành**: nhập dữ liệu thật → thấy biểu đồ, tổng tài sản, tiến độ
 mục tiêu cập nhật. ✅ Đã smoke test server thật: /assets ra 1.5 lượng vàng =
@@ -218,10 +225,12 @@ mobile+desktop.
   — threshold chỉ áp khi chạy `test:coverage`.
 - Toast lỗi dùng 1 element tạo động trong `app.js` (không phải mỗi fetch tự tạo);
   helper `safe(task)` bọc mọi loader trong `refreshAll`/`initialize`.
-- Biểu đồ có fallback: nếu tải Chart.js (CDN) thất bại, canvas đổi thành
-  `.chart-fallback` kèm thông báo tiếng Việt thay vì im lặng.
+- Biểu đồ có fallback: nếu không vẽ được (thiếu Chart.js, dữ liệu lỗi...), canvas
+  đổi thành `.chart-fallback` kèm **thông báo lỗi thật** (không đổ lỗi internet
+  chung chung) thay vì im lặng.
+- Chart.js phục vụ nội bộ qua `GET /vendor/chart.js` (xem lệch kế hoạch Phase 3).
 
-**Điều kiện hoàn thành**: ✅ `npm run test:coverage` xanh — 143 test, all files
+**Điều kiện hoàn thành**: ✅ `npm run test:coverage` xanh — 144 test, all files
 93.29% stmts / 81.26% branch / 100% funcs / 93.24% lines; transactionService &
 transferService đạt 100%. Checklist tay trong `docs/QA-CHECKLIST.md` chờ user
 chạy mobile+desktop.

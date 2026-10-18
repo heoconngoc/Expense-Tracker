@@ -765,6 +765,9 @@ async function renderCharts(dashboard) {
   const trendCanvas = document.querySelector("#trend-chart");
   const categoryCanvas = document.querySelector("#category-chart");
 
+  clearChartFallback(trendCanvas);
+  clearChartFallback(categoryCanvas);
+
   try {
     await renderTrendChart(
       trendCanvas,
@@ -776,7 +779,7 @@ async function renderCharts(dashboard) {
     console.error("Failed to render trend chart", err);
     showChartFallback(
       trendCanvas,
-      "Không tải được biểu đồ. Cần internet để tải Chart.js."
+      `Không vẽ được biểu đồ: ${err?.message || "lỗi không xác định"}`
     );
   }
 
@@ -791,17 +794,30 @@ async function renderCharts(dashboard) {
     console.error("Failed to render category chart", err);
     showChartFallback(
       categoryCanvas,
-      "Không tải được biểu đồ. Cần internet để tải Chart.js."
+      `Không vẽ được biểu đồ: ${err?.message || "lỗi không xác định"}`
     );
   }
+}
+
+function clearChartFallback(canvas) {
+  const box = canvas?.parentElement;
+
+  if (!box) {
+    return;
+  }
+
+  box.querySelector(".chart-fallback")?.remove();
+  canvas.hidden = false;
 }
 
 function showChartFallback(canvas, message) {
   const box = canvas.parentElement;
 
-  if (!box || box.querySelector(".chart-fallback")) {
+  if (!box) {
     return;
   }
+
+  box.querySelector(".chart-fallback")?.remove();
 
   const note = document.createElement("p");
   note.className = "chart-fallback";
