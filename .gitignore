@@ -4,6 +4,8 @@ coverage/
 *.db
 *.db-shm
 *.db-wal
+*.db.gz
+database/backups/
 *.sqlite
 *.sqlite3
 .DS_Store

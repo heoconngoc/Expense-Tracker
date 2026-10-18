@@ -4,6 +4,11 @@ import { fileURLToPath } from "node:url";
 import sqlite3 from "sqlite3";
 
 const DB_PATH = process.env.DB_PATH || "database/expense.db";
+
+if (DB_PATH !== ":memory:") {
+  fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
+}
+
 const db = new sqlite3.Database(DB_PATH);
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -16,7 +21,9 @@ const MIGRATIONS_DIR = path.join(
   __dirname,
   "../database/migrations"
 );
-const BACKUP_DIR = path.join(__dirname, "../database/backups");
+const BACKUP_DIR =
+  process.env.BACKUP_DIR ||
+  path.join(__dirname, "../database/backups");
 
 db.exec(
   `

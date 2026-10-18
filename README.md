@@ -325,20 +325,33 @@ After data changes, the relevant frontend data is refreshed so account balances,
 
 ```text
 expense-tracker/
+├── .github/
+│   └── workflows/
+│       ├── ci.yml
+│       └── deploy.yml
+│
 ├── database/
 │   ├── migrations/
-│   │   └── 001_money_to_integer.sql
+│   │   ├── 001_money_to_integer.sql
+│   │   └── 002_asset_features.sql
 │   ├── schema.sql
 │   ├── seed-reference.sql
 │   ├── seed.sql
 │   └── queries.sql
 │
+├── deploy/
+│   ├── backup-db.sh
+│   └── nginx.conf
+│
 ├── docs/
-│   ├── architecture.md
-│   ├── database-design.md
+│   ├── PLAN.md
+│   ├── LESSONS.md
+│   ├── QA-CHECKLIST.md
 │   └── images/
 │
 ├── public/
+│   ├── js/
+│   │   └── charts.js
 │   ├── index.html
 │   ├── styles.css
 │   └── app.js
@@ -348,16 +361,30 @@ expense-tracker/
 │   │   └── AppError.js
 │   ├── routes/
 │   │   ├── accounts.js
+│   │   ├── assets.js
+│   │   ├── backup.js
 │   │   ├── categories.js
 │   │   ├── currencies.js
 │   │   ├── dashboard.js
+│   │   ├── exchangeRates.js
+│   │   ├── goldHoldings.js
+│   │   ├── goldPrices.js
+│   │   ├── savingsGoals.js
+│   │   ├── settings.js
 │   │   ├── transactions.js
 │   │   └── transfers.js
 │   ├── services/
 │   │   ├── accountService.js
+│   │   ├── assetService.js
+│   │   ├── backupService.js
 │   │   ├── categoryService.js
 │   │   ├── currencyService.js
 │   │   ├── dashboardService.js
+│   │   ├── exchangeRateService.js
+│   │   ├── goldHoldingService.js
+│   │   ├── goldPriceService.js
+│   │   ├── savingsGoalService.js
+│   │   ├── settingsService.js
 │   │   ├── transactionService.js
 │   │   └── transferService.js
 │   ├── app.js
@@ -366,12 +393,9 @@ expense-tracker/
 │
 ├── test/
 │   ├── setup.js
-│   ├── api.test.js
-│   ├── database.test.js
-│   ├── manage.test.js
-│   ├── transactionService.test.js
-│   └── transferService.test.js
+│   └── *.test.js
 │
+├── ecosystem.config.cjs
 ├── .gitignore
 ├── package.json
 ├── package-lock.json
@@ -477,6 +501,223 @@ The test suite covers important business behavior including:
 - Invalid or inactive references
 - REST API success and error responses
 
+## Deployment (Azure VM + continuous deployment)
+
+The app runs on a small Ubuntu VM with this layout:
+
+```text
+Browser
+  │  HTTP(S) + basic auth
+  ▼
+nginx (reverse proxy, port 80/443)
+  ▼
+pm2 ──► node src/server.js (port 3000)
+  ▼
+/var/lib/expense-tracker/expense.db   (data, outside the deploy folder)
+/var/lib/expense-tracker/backups/     (nightly .db.gz, kept 7 days)
+```
+
+Code lives in `/var/www/expense-tracker` and is **wiped on every deploy**, so the
+database and backups are kept in `/var/lib` and are never touched by a redeploy.
+
+Files that support this:
+
+- `ecosystem.config.cjs` — pm2 process definition + production env
+- `deploy/backup-db.sh` — nightly SQLite `.backup` + gzip + 7-day retention
+- `deploy/nginx.conf` — reverse proxy + basic auth
+- `.github/workflows/deploy.yml` — on green CI on `main`: rsync, `npm ci`, pm2 reload
+
+### Part 1 — Create the VM (Azure portal)
+
+1. Sign in to <https://portal.azure.com>. If you are a student, first activate
+   **Azure for Students** at <https://azure.microsoft.com/free/students>
+   (verify with your school email — no credit card required).
+2. In the portal search bar type **Virtual machines** → **Create** →
+   **Azure virtual machine**.
+3. Fill in the **Basics** tab:
+   - **Subscription**: Azure for Students (or your subscription).
+   - **Resource group**: create new, e.g. `expense-tracker-rg`.
+   - **Virtual machine name**: `expense-tracker-vm`.
+   - **Region**: **Southeast Asia** (closest to Vietnam).
+   - **Availability options**: No infrastructure redundancy required.
+   - **Security type**: Standard.
+   - **Image**: **Ubuntu Server 24.04 LTS - x64 Gen2**.
+   - **Size**: click **See all sizes**, search `B1s` (1 vCPU, 1 GiB). Under
+     Azure for Students it is free for 750 hours/month. If `B1s` is unavailable
+     in the region, pick `B1ls`/`B2ats_v2` but check the free-tier note.
+   - **Authentication type**: **SSH public key**.
+   - **Username**: e.g. `azureuser`.
+   - **SSH public key source**: **Generate new key pair**; **Key pair name**:
+     `expense-tracker-key`.
+   - **Public inbound ports**: **Allow selected ports** → check **SSH (22)** and
+     **HTTP (80)**. Add **HTTPS (443)** too if you plan to use a domain.
+4. **Disks** tab: leave defaults (Standard SSD is fine).
+5. **Networking** tab: keep the defaults (it creates a public IP + NSG). Make
+   sure inbound 22, 80 (and 443) are allowed.
+6. **Review + create** → **Create**. When prompted, **Download private key and
+   create resource**. You get `expense-tracker-key.pem` — keep it safe, this is
+   the only copy.
+7. After deployment, open the VM and copy the **Public IP address** (Overview
+   page). You need it for SSH and GitHub secrets.
+
+Move the key to a safe place and lock it down (on your Mac):
+
+```bash
+mv ~/Downloads/expense-tracker-key.pem ~/.ssh/expense-tracker-key.pem
+chmod 400 ~/.ssh/expense-tracker-key.pem
+```
+
+Connect for the first time (replace the IP):
+
+```bash
+ssh -i ~/.ssh/expense-tracker-key.pem azureuser@<PUBLIC_IP>
+```
+
+### Part 2 — Prepare the VM
+
+Run these on the VM (after `ssh`):
+
+```bash
+# 1. System packages
+sudo apt update
+sudo apt install -y nginx sqlite3 rsync build-essential python3 apache2-utils
+
+# 2. Node.js 24 (NodeSource)
+curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
+sudo apt install -y nodejs
+
+# 3. pm2 (process manager) + run it on boot
+sudo npm install -g pm2
+pm2 startup systemd -u "$USER" --hp "$HOME"   # run the printed sudo command
+
+# 4. Data + deploy folders
+sudo mkdir -p /var/lib/expense-tracker/backups
+sudo chown -R "$USER":"$USER" /var/lib/expense-tracker
+sudo mkdir -p /var/www/expense-tracker
+sudo chown -R "$USER":"$USER" /var/www/expense-tracker
+```
+
+Verify: `node -v` (v24.x) and `pm2 -v`.
+
+### Part 3 — GitHub repository secrets
+
+On GitHub open your repo → **Settings** → **Secrets and variables** →
+**Actions** → **New repository secret**. Add:
+
+| Secret | Value |
+|---|---|
+| `AZURE_SSH_HOST` | the VM public IP (e.g. `20.1.2.3`) |
+| `AZURE_SSH_USER` | `azureuser` |
+| `AZURE_SSH_KEY` | the **entire contents** of `expense-tracker-key.pem`, including the `-----BEGIN/END-----` lines |
+
+To print the key for copying:
+
+```bash
+cat ~/.ssh/expense-tracker-key.pem
+```
+
+### Part 4 — First deploy
+
+The deploy pipeline runs automatically when CI passes on `main`. To bring the
+app up for the first time, merge/push `develop` into `main` (or push any commit
+to `main`). The **Deploy** workflow will rsync the code, run `npm ci --omit=dev`
+and start pm2.
+
+If you prefer to do the first deploy by hand (optional sanity check):
+
+```bash
+# on your Mac
+rsync -avz --delete --exclude node_modules --exclude .git \
+  --exclude '.env' --exclude 'database/*.db*' --exclude 'database/backups' \
+  -e "ssh -i ~/.ssh/expense-tracker-key.pem" \
+  ./ azureuser@<PUBLIC_IP>:/var/www/expense-tracker/
+
+# on the VM
+cd /var/www/expense-tracker
+npm ci --omit=dev
+pm2 startOrReload ecosystem.config.cjs --env production
+pm2 save
+pm2 logs expense-tracker --lines 30
+```
+
+The app now listens on `http://127.0.0.1:3000`. You can check directly with
+`curl http://127.0.0.1:3000/dashboard?...` before exposing it via nginx.
+
+### Part 5 — nginx reverse proxy + basic auth
+
+```bash
+# 1. Expose the site config
+sudo cp /var/www/expense-tracker/deploy/nginx.conf /etc/nginx/sites-available/expense-tracker
+sudo ln -sf /etc/nginx/sites-available/expense-tracker /etc/nginx/sites-enabled/expense-tracker
+sudo rm -f /etc/nginx/sites-enabled/default
+
+# 2. Basic auth (choose a username, set a password when prompted)
+sudo htpasswd -c /etc/nginx/.htpasswd yourname
+
+# 3. Test and reload
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+Open `http://<PUBLIC_IP>` in a browser — the browser should ask for the
+username/password, then show the app.
+
+HTTPS (optional — needs a domain whose A record points at the VM's public IP):
+
+```bash
+sudo apt install -y certbot python3-certbot-nginx
+sudo certbot --nginx -d your-domain.com
+```
+
+### Part 6 — Nightly database backup
+
+```bash
+# create the cron job (runs every day at 03:00 as the current user)
+( crontab -l 2>/dev/null; \
+  echo '0 3 * * * DB_PATH=/var/lib/expense-tracker/expense.db BACKUP_DIR=/var/lib/expense-tracker/backups /var/www/expense-tracker/deploy/backup-db.sh >> /var/log/expense-backup.log 2>&1' \
+) | crontab -
+```
+
+Run it once to confirm it works:
+
+```bash
+DB_PATH=/var/lib/expense-tracker/expense.db \
+BACKUP_DIR=/var/lib/expense-tracker/backups \
+/var/www/expense-tracker/deploy/backup-db.sh
+ls -lh /var/lib/expense-tracker/backups
+```
+
+### Part 7 — Restore a backup
+
+```bash
+cd /var/lib/expense-tracker/backups
+gunzip -k expense-YYYY-MM-DD-HHMMSS.db.gz          # keep the .gz too
+pm2 stop expense-tracker
+cp expense-YYYY-MM-DD-HHMMSS.db /var/lib/expense-tracker/expense.db
+rm -f /var/lib/expense-tracker/expense.db-wal /var/lib/expense-tracker/expense.db-shm
+pm2 start expense-tracker
+```
+
+Alternatively, use the in-app **Xuất/Nhập JSON** feature in the Quản lý tab to
+export from anywhere and import back.
+
+### Ongoing deploys
+
+1. Push to `develop`, open a PR, merge into `main`.
+2. CI runs on `main`; when green, the **Deploy** workflow syncs the VM and runs
+   `pm2 startOrReload`.
+3. Reload the browser. The database is untouched (it lives in `/var/lib`).
+
+### Troubleshooting
+
+```bash
+pm2 status                          # is the process online?
+pm2 logs expense-tracker            # app logs
+sudo tail -f /var/log/nginx/error.log
+sudo systemctl status nginx
+curl -I http://127.0.0.1:3000       # bypass nginx
+```
+
 ## Database Performance
 
 Indexes are included for common transaction access patterns:
@@ -544,13 +785,10 @@ Possible future extensions include:
 
 - User authentication
 - Per-user accounts and transactions
-- Automated database migration runner
 - Historical exchange-rate integration
-- Charts and financial visualizations
 - Pagination
 - More advanced transaction filtering
 - Budgets and recurring transactions
-- Deployment
 - Logging and monitoring
 
 These features are intentionally outside the scope of the current version.

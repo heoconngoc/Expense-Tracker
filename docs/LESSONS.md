@@ -911,3 +911,89 @@ hàm mới không) và yêu cầu hard refresh. Tránh sửa code khi lỗi ch�
 5. Khi user báo UI không đổi, vì sao phải kiểm tra tiến trình server + cache
    trước khi sửa code?
 
+## Phase 5 — Deploy Azure VM + CD
+
+### 5.1 CI đỏ vì lockfile lệch, không phải vì test
+
+Triệu chứng: `npm test` xanh ở máy local nhưng GitHub Actions đỏ sau ~10s, ở cả
+push lẫn PR. Thủ phạm: mình **pin** `chart.js` thành `"4.4.1"` trong `package.json`
+nhưng quên cập nhật `package-lock.json` (lock vẫn `"^4.4.1"`). `npm ci` **từ chối
+chạy** khi hai file không khớp, nên fail ngay bước cài đặt, chưa tới test.
+
+Bài học: sau mỗi lần sửa version trong `package.json`, chạy lại `npm install` để
+đồng bộ lock, rồi **tự chạy `npm ci`** (đúng lệnh CI dùng) trước khi push. `npm
+install` (local) dễ dãi hơn `npm ci` (sạch, khớp lock) nên không lộ lỗi.
+
+### 5.2 pm2 config trong dự án ESM phải là `.cjs`
+
+`package.json` có `"type": "module"`. pm2 đọc file config bằng `require`
+(CommonJS), nên `ecosystem.config.js` sẽ lỗi cú pháp ESM. Đặt tên
+**`ecosystem.config.cjs`** và dùng `module.exports`. Đổi lệnh tương ứng:
+`pm2 startOrReload ecosystem.config.cjs --env production`.
+
+### 5.3 Dữ liệu phải sống ngoài thư mục deploy
+
+Deploy dùng `rsync --delete` (xoá file lạ trên server). Nếu để DB trong repo
+(`database/expense.db`) thì mỗi lần deploy sẽ **mất sạch dữ liệu**. Vì vậy:
+
+- DB và backup nằm ở `/var/lib/expense-tracker/` (ngoài `/var/www/...`).
+- `ecosystem.config.cjs` set `DB_PATH` + `BACKUP_DIR` trỏ vào đó.
+- `rsync` loại trừ `*.db`, `*.db-*`, `database/backups`.
+- `database.js` tự `mkdirSync` thư mục chứa DB để lần chạy đầu không lỗi
+  `SQLITE_CANTOPEN`.
+
+### 5.4 Backup SQLite đang chạy: dùng `.backup`, không `cp`
+
+Copy file DB thô khi server đang chạy dễ mất dữ liệu trong WAL. `sqlite3 DB
+".backup 'dest.db'"` là bản online-safe (tự xử lý WAL), rồi mới `gzip`. Cron
+nightly + `find -mtime +7 -delete` để tự dọn. Đây là bản production hoá của bài
+học WAL ở Phase trước.
+
+### 5.5 CD bằng `workflow_run` thay vì deploy trong chính CI
+
+Tách workflow **Deploy** chạy `on: workflow_run` khi workflow **CI** kết thúc,
+lọc `conclusion == 'success' && head_branch == 'main'`. Lợi ích: không lặp lại
+test, không deploy nhầm từ `develop`/PR. Dùng `rsync` native + `ssh` (không cần
+action bên thứ ba) nên hợp cả repo private.
+
+### 5.6 Lockfile sinh trên macOS thiếu optional deps của Linux
+
+CI fail ở `npm ci` với `npm error code EUSAGE ... Missing: @emnapi/core@1.11.3
+from lock file`. Nguyên nhân: lockfile được `npm install` **trên macOS** — npm
+11.x chỉ ghi optional deps của **platform hiện tại** (darwin-arm64), bỏ hết biến
+thể `@parcel/watcher-*`, `@unrs/resolver-binding-*`, `@emnapi/*` cho linux/win32/
+android. Trên CI (linux-x64) `npm ci` cần các entry đó → báo "Missing from lock".
+
+Thêm 2 package làm devDep chỉ chữa được `@emnapi` nhưng vẫn fail tiếp vì thiếu
+`@parcel/watcher`... Giải pháp dứt điểm:
+
+- **Sinh `package-lock.json` trong môi trường Linux** (khớp CI), không phải macOS.
+  Dùng Docker: `docker run --rm -v "$PWD":/app -w /app node:24 sh -c "rm -f
+  package-lock.json && npm install --package-lock-only"` rồi copy lock về repo.
+- Lock sinh trên Linux ghi đủ **mọi** platform (android/darwin/freebsd/linux/win32).
+- Verify bằng đúng môi trường CI trước khi push: image `ubuntu:24.04` + Node 24
+  (`npm ci && npm test`). Container `node:24` (Debian bookworm, glibc 2.36) sẽ
+  fail sqlite3 vì prebuilt cần glibc 2.38 — đừng nhầm đó là lỗi code; `ubuntu:24.04`
+  (glibc 2.39) mới giống `ubuntu-latest`.
+
+**Quy tắc rút ra**: sau khi thêm/bớt dependency, đừng tin `npm ci` trên máy local
+macOS. Chạy verify trong container Linux giống CI, nhất là khi lockfile được tạo
+bằng `--package-lock-only`.
+
+### Điểm dừng Phase 5
+
+- [x] `ecosystem.config.cjs` (pm2, env production, DB + BACKUP ở `/var/lib`)
+- [x] `deploy/backup-db.sh` (sqlite `.backup` → gzip → giữ 7 ngày) + hướng dẫn cron
+- [x] `deploy/nginx.conf` (reverse proxy + basic auth + `client_max_body_size 12m`)
+- [x] `.github/workflows/deploy.yml` (rsync + `npm ci --omit=dev` + pm2 reload)
+- [x] `database.js`: tự tạo thư mục DB, `BACKUP_DIR` cấu hình qua env
+- [x] README: hướng dẫn Azure portal từng bước (Part 1–7 + troubleshooting)
+- [ ] ⏳ User tạo VM + thêm GitHub Secrets + merge `main` (việc thao tác web)
+
+**Tự kiểm tra hiểu bài**:
+1. Vì sao `npm ci` fail còn `npm install` thì không, khi lockfile lệch?
+2. Vì sao phải dùng `ecosystem.config.cjs` chứ không phải `.js` trong dự án này?
+3. Vì sao để DB trong thư mục deploy là nguy hiểm khi dùng `rsync --delete`?
+4. Vì sao `.backup` an toàn hơn `cp` khi server đang chạy?
+5. Vì sao deploy nên tách workflow và lọc theo `head_branch`?
+

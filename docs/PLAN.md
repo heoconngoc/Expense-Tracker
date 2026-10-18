@@ -239,23 +239,37 @@ chạy mobile+desktop.
 
 **Mục tiêu**: app live trên internet, mỗi push tự deploy.
 
-- [ ] Hướng dẫn chi tiết (trong README) từng bước:
+- [x] Hướng dẫn chi tiết (trong README) từng bước:
   1. Đăng ký Azure for Students (email trường, cần xác minh sinh viên)
   2. Tạo VM Ubuntu 24.04 B1s trong portal Azure (region Southeast Asia — gần VN)
   3. SSH key auth (không dùng password)
   4. Cài Node LTS + pm2 + nginx (nginx làm reverse proxy + HTTPS Let's Encrypt)
-- [ ] `ecosystem.config.js` cho pm2: `node src/server.js`, env `DB_PATH=/var/lib/expense-tracker/expense.db`
-  (đĩa data riêng, không nằm trong thư mục deploy → không mất khi redeploy)
-- [ ] Script backup DB: cron nightly `sqlite3 .backup` → gzip → thư mục backup,
-  giữ 7 ngày
-- [ ] GitHub Secrets: `AZURE_SSH_HOST`, `AZURE_SSH_USER`, `AZURE_SSH_KEY`
-- [ ] `.github/workflows/deploy.yml`: sau khi CI xanh trên `main` → rsync code
-  lên VM → `pm2 restart expense-tracker`
-- [ ] Basic auth tầng nginx cho app cá nhân (tránh bot gõ bừa)
-- [ ] Ghi bài học cho từng bước deploy
+- [x] `ecosystem.config.cjs` cho pm2: `node src/server.js`,
+  `DB_PATH=/var/lib/expense-tracker/expense.db` + `BACKUP_DIR` (đĩa data riêng,
+  không nằm trong thư mục deploy → không mất khi redeploy)
+- [x] Script backup DB `deploy/backup-db.sh`: nightly `sqlite3 .backup` → gzip →
+  thư mục backup, giữ 7 ngày
+- [x] GitHub Secrets: `AZURE_SSH_HOST`, `AZURE_SSH_USER`, `AZURE_SSH_KEY`
+- [x] `.github/workflows/deploy.yml`: sau khi CI xanh trên `main` → rsync code
+  lên VM → `npm ci --omit=dev` → `pm2 startOrReload`
+- [x] Basic auth tầng nginx cho app cá nhân (`deploy/nginx.conf`)
+- [x] Ghi bài học cho từng bước deploy (LESSONS Phase 5)
 
-**Điều kiện hoàn thành**: truy cập `http://<ip-vm>` hoặc domain thấy app,
-push code → 2 phút sau app tự cập nhật, DB sống qua redeploy (có backup).
+**Ghi chú lệch kế hoạch (đã chốt khi làm)**:
+- pm2 config đặt tên `ecosystem.config.cjs` (không phải `.js`) vì `package.json`
+  có `"type": "module"`; pm2 đọc config qua CommonJS nên `.cjs` tránh lỗi.
+- Deploy dùng **rsync native + ssh** (không dùng action bên thứ ba), phù hợp cả
+  repo private. Trigger bằng `workflow_run` khi workflow **CI** kết thúc xanh và
+  `head_branch == main`.
+- `database.js` tự `mkdirSync` thư mục chứa `DB_PATH` và nhận `BACKUP_DIR` từ env
+  (mặc định vẫn là `database/backups`) để chạy an toàn với `/var/lib/...`.
+- Thêm `deploy/nginx.conf` (reverse proxy + basic auth + `client_max_body_size 12m`
+  cho file backup ~10mb).
+
+**Điều kiện hoàn thành**: code + tài liệu deploy sẵn sàng. ⏳ Chờ user tạo VM trên
+Azure (portal) và thêm GitHub Secrets rồi merge `main` để deploy thật. Sau đó
+kiểm tra: `http://<ip-vm>` thấy app (qua basic auth), push → app tự cập nhật, DB
+sống qua redeploy, backup nightly có file `.db.gz`.
 
 ## 6. Quy tắc code
 
