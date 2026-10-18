@@ -13,15 +13,21 @@ Conventions:
 Runtime layout on the VM:
 
 ```text
-Browser
-  │  HTTP(S) + basic auth
-  ▼
-nginx (80/443)
-  ▼
-pm2 ──► node src/server.js (3000)
-  ▼
-/var/lib/expense-tracker/expense.db     ← data (NOT inside the deploy folder)
-/var/lib/expense-tracker/backups/       ← nightly .db.gz
+                Browser
+                   │
+      ┌────────────┴────────────┐
+      │ :80 (basic auth)        │ :8080 (public demo)
+      ▼                         ▼
+    nginx ─────────────────── nginx
+      │                         │
+      ▼                         ▼
+pm2: expense-tracker      pm2: expense-tracker-demo
+     node src/server.js        node src/server.js
+       (3000)                    (3001)
+      ▼                         ▼
+/var/lib/expense-tracker/expense.db   ← data (NOT inside the deploy folder)
+/var/lib/expense-tracker/demo.db      ← demo sample data (reset nightly)
+/var/lib/expense-tracker/backups/     ← nightly .db.gz
 ```
 
 ---
@@ -36,6 +42,7 @@ pm2 ──► node src/server.js (3000)
 - [x] **Step 7** — nginx reverse proxy + basic auth.
 - [x] **Step 8** — Nightly database backup.
 - [x] **Step 9** — Final verification.
+- [ ] **Optional** — Public demo instance (port 8080) + nightly reset.
 
 ---
 
@@ -165,11 +172,6 @@ You should see `Backup written: ...` and one `expense-<date-time>.db.gz` file.
 crontab -l
 ```
 
-You must see the `0 3 * * * ...` line.
-
-> If the cron job cannot write the log due to permissions, point the log at
-> `$HOME/expense-backup.log` instead.
-
 ### 8.4. (Optional) Restore from a backup
 
 ```bash
@@ -182,6 +184,59 @@ pm2 start expense-tracker
 ```
 
 Or use the **JSON export/import** feature in the app's *Management* tab.
+
+---
+
+## Optional — Public demo instance
+
+Goal: let guests try the app without a login, using sample data that resets
+nightly, while your real data stays private.
+
+The repo already defines everything: a second pm2 app
+(`expense-tracker-demo`, port 3001, `SEED_SAMPLE=1`, database
+`/var/lib/expense-tracker/demo.db`) and a second nginx server block on port
+8080 with no basic auth. On the next deploy `pm2 startOrReload` starts both
+apps automatically; the demo database is created and seeded on its first start.
+
+You only need to expose port 8080 and load the nginx config:
+
+1. **Open port 8080 in the Azure NSG** (Azure portal → your VM → Networking →
+   Add inbound port rule): `Destination port ranges = 8080`, `Protocol = TCP`,
+   `Action = Allow`. (Skip this and only you can reach the demo.)
+
+2. **Load the nginx config** (`# on the VM`) — the demo block lives in the same
+   file, so this is the same copy + reload as Step 7:
+
+   ```bash
+   sudo cp /var/www/expense-tracker/deploy/nginx.conf /etc/nginx/sites-available/expense-tracker
+   sudo nginx -t && sudo systemctl reload nginx
+   ```
+
+3. **Check both apps** (`# on the VM`):
+
+   ```bash
+   pm2 status                 # expense-tracker AND expense-tracker-demo online
+   curl -I http://127.0.0.1:3001   # demo app → HTTP/1.1 200
+   curl -I http://127.0.0.1:8080   # through nginx, no auth → 200 (not 401)
+   ```
+
+   From your machine: open `http://<PUBLIC_IP>:8080` → the app opens with sample
+   data and no login.
+
+4. **Reset the demo nightly** (03:30, after the 03:00 backup; `# on the VM`):
+
+   ```bash
+   ( crontab -l 2>/dev/null; \
+     echo '30 3 * * * /var/www/expense-tracker/deploy/reset-demo-db.sh >> /var/log/expense-demo.log 2>&1' \
+   ) | crontab -
+   ```
+
+   The script stops the demo app, deletes `demo.db`, and restarts it; the app
+   then re-seeds the sample data. Run it once by hand to test:
+
+   ```bash
+   /var/www/expense-tracker/deploy/reset-demo-db.sh
+   ```
 
 ---
 

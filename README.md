@@ -339,6 +339,7 @@ expense-tracker/
 │   └── queries.sql
 ├── deploy/
 │   ├── backup-db.sh
+│   ├── reset-demo-db.sh
 │   └── nginx.conf
 ├── docs/
 │   ├── DEPLOY-VM.md
@@ -404,6 +405,10 @@ sqlite3 database/dev.db < database/seed-reference.sql
 sqlite3 database/dev.db < database/seed.sql
 ```
 
+To start with the sample data automatically, set `SEED_SAMPLE=1`: on a fresh
+database the server then seeds `database/seed.sql` instead of reference data
+only. This is how the public demo instance is populated.
+
 ## Testing
 
 ```bash
@@ -420,30 +425,46 @@ branches / 80% functions / 80% lines).
 ## Deployment
 
 The app runs on a small Ubuntu VM behind nginx, managed by pm2, deployed by
-GitHub Actions.
+GitHub Actions. There are two instances on the same VM: a **private** one behind
+basic auth, and a **public demo** with sample data and no login.
 
 ```text
-Browser
-  │  HTTP(S) + basic auth
-  ▼
-nginx (80/443)
-  ▼
-pm2 ──► node src/server.js (3000)
-  ▼
-/var/lib/expense-tracker/expense.db      (data, outside the deploy folder)
-/var/lib/expense-tracker/backups/        (nightly .db.gz, kept 7 days)
+                  Browser
+                     │
+        ┌────────────┴────────────┐
+        │ :80 (basic auth)        │ :8080 (public demo)
+        ▼                         ▼
+      nginx ─────────────────── nginx
+        │                         │
+        ▼                         ▼
+pm2: expense-tracker      pm2: expense-tracker-demo
+   node src/server.js        node src/server.js
+        (3000)                    (3001)
+        ▼                         ▼
+/var/lib/expense-tracker/expense.db     (data, outside the deploy folder)
+/var/lib/expense-tracker/demo.db        (sample data, reset nightly)
+/var/lib/expense-tracker/backups/       (nightly .db.gz, kept 7 days)
 ```
 
 Code lives in `/var/www/expense-tracker` and is **replaced on every deploy**, so
-the database and backups are kept in `/var/lib` and are never touched by a
+the databases and backups are kept in `/var/lib` and are never touched by a
 redeploy.
 
 Supporting files:
 
-- `ecosystem.config.cjs` — pm2 process definition + production env
+- `ecosystem.config.cjs` — pm2 process definitions (private + demo) + production env
 - `deploy/backup-db.sh` — nightly SQLite `.backup` + gzip + 7-day retention
-- `deploy/nginx.conf` — reverse proxy + basic auth
+- `deploy/reset-demo-db.sh` — rebuild the demo database with fresh sample data
+- `deploy/nginx.conf` — reverse proxy + basic auth (private) and open demo (8080)
 - `.github/workflows/deploy.yml` — on green CI on `main`: rsync, `npm ci`, pm2 reload
+
+### Public demo
+
+The demo instance runs the same code with `SEED_SAMPLE=1` and its own database,
+so guests can click around with sample data. It is served on port 8080 without
+basic auth; open that port in the Azure NSG to expose it. Because visitors can
+edit freely, `deploy/reset-demo-db.sh` deletes the demo database nightly so the
+app re-seeds it from `database/seed.sql` on the next start.
 
 ### CI/CD flow
 
