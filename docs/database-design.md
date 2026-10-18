@@ -4,9 +4,13 @@
 
 - Currency
 - Category
-- Account
+- Account (`type`: spending / savings / gold)
 - Transaction
 - Transfer
+- Gold holding
+- Savings goal
+- Savings contribution
+- Exchange rate
 - App Settings
 
 ## Relationships
@@ -14,7 +18,15 @@
 Currency
   └── Account
         ├── Transaction
-        └── Transfer
+        ├── Transfer
+        └── Gold holding
+
+Currency
+  └── Exchange rate
+
+Currency
+  └── Savings goal
+        └── Savings contribution
 
 Category
   └── Transaction
@@ -36,6 +48,23 @@ it is stored as an integer in micro units (`rate * 1_000_000`).
 
 The API only accepts and returns integers for money. The browser converts
 between minor units and display format.
+
+## Gold Holdings
+
+Gold quantity can be fractional, so it is stored as an integer in
+**thousandths of the chosen unit** to stay exact: `1.5 luong` is stored as
+`1500`, and `0.5 chi` as `500`. One `luong` equals ten `chi`.
+
+The service layer converts between the decimal `quantity` the API accepts
+and the integer stored in the database, and values a holding in VND using
+the current gold price per `luong`.
+
+## Exchange Rates
+
+`exchange_rates` stores one rate per currency, expressed in VND, as an
+integer in micro units (`rate * 1_000_000`) — the same convention as
+`transfers.exchange_rate`. Rates come from the rate API with a manual
+fallback, and the `source` column records which was used.
 
 ## Transactions
 
@@ -95,6 +124,17 @@ filter.
 On the first run the server creates the schema and seeds reference data
 only: currencies, categories, and app settings. There are no accounts,
 transactions, or transfers, so the user starts with an empty book.
+
+On later runs it applies any pending files in `database/migrations/`,
+tracked in a `schema_migrations` table, after copying a safety backup of
+the database.
+
+## Savings Goals
+
+A savings goal has a name, a target amount, a currency, and an optional
+deadline. Contributions are separate rows linked to the goal, so the
+progress of a goal is the sum of its contributions against the target.
+Goals are archived rather than deleted once they are no longer active.
 
 `database/seed-reference.sql` holds the reference data.
 `database/seed.sql` holds a full demo data set and is used by the
