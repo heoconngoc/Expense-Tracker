@@ -20,7 +20,15 @@ continuous deployment to a small cloud VM.
 No sign-up needed. The demo runs on sample data that resets every night, so feel
 free to add, edit, and delete anything.
 
-![Expense Tracker dashboard](docs/images/dashboard.png)
+
+## Screenshots
+
+| Overview | Transactions |
+|:---:|:---:|
+| ![Dashboard 1](docs/images/dashboard1.png) | ![Dashboard 2](docs/images/dashboard2.png) |
+| **Asset** | **Goal** |
+| ![Dashboard 3](docs/images/dashboard3.png) | ![Dashboard 4](docs/images/dashboard4.png) |
+
 
 ## Features
 
