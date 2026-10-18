@@ -1,14 +1,26 @@
 # Expense Tracker
 
-A full-stack personal finance tracker built with **Node.js, Express, and SQLite**.
+[![CI](https://github.com/heoconngoc/expense-tracker/actions/workflows/ci.yml/badge.svg)](https://github.com/heoconngoc/expense-tracker/actions/workflows/ci.yml)
+[![Live demo](https://img.shields.io/badge/live_demo-try_it_now-success)](http://20.110.234.170:8080)
+[![Tests](https://img.shields.io/badge/tests-144_passing-brightgreen)](#testing)
+[![Node.js](https://img.shields.io/badge/node-%E2%89%A5%2024-339933?logo=node.js&logoColor=white)](https://nodejs.org)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](#license)
 
-It started as a simple income/expense book and grew into a small net-worth
-tracker: it aggregates total assets in VND across every account and gold
-holding, tracks savings goals, and visualizes spending trends with charts.
-
-The project focuses on relational database design, transactional consistency,
-a layered REST API, automated testing, a lightweight vanilla-JS frontend, and
+A full-stack **personal finance and net-worth tracker** built with Node.js,
+Express, and SQLite. It aggregates your total assets in VND across cash accounts
+and gold holdings, tracks savings goals, and visualizes spending trends with
+charts — a study in relational database design, transactional consistency, a
+layered REST API, automated testing, a lightweight vanilla-JS frontend, and
 continuous deployment to a small cloud VM.
+
+## ▶ Try it live
+
+**[Open the live demo → http://20.110.234.170:8080](http://20.110.234.170:8080)**
+
+No sign-up needed. The demo runs on sample data that resets every night, so feel
+free to add, edit, and delete anything.
+
+![Expense Tracker dashboard](docs/images/dashboard.png)
 
 ## Features
 
@@ -35,10 +47,6 @@ continuous deployment to a small cloud VM.
 - Validate business rules at the service layer
 - Protect data integrity with SQLite constraints
 - Automated service and REST API tests
-
-## Preview
-
-![Expense Tracker Dashboard](docs/images/dashboard.png)
 
 ## Tech Stack
 
@@ -523,3 +531,7 @@ internal details.
 - PWA support and dark mode
 
 These are intentionally outside the current scope.
+
+## License
+
+Released under the [MIT License](LICENSE).
