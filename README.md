@@ -1,8 +1,14 @@
 # Expense Tracker
 
-A full-stack personal expense tracking application built with **Node.js, Express, and SQLite**.
+A full-stack personal finance tracker built with **Node.js, Express, and SQLite**.
 
-The project focuses on relational database design, transactional consistency, REST API architecture, automated testing, and integration between a backend API and a lightweight browser frontend.
+It started as a simple income/expense book and grew into a small net-worth
+tracker: it aggregates total assets in VND across every account and gold
+holding, tracks savings goals, and visualizes spending trends with charts.
+
+The project focuses on relational database design, transactional consistency,
+a layered REST API, automated testing, a lightweight vanilla-JS frontend, and
+continuous deployment to a small cloud VM.
 
 ## Features
 
@@ -10,24 +16,27 @@ The project focuses on relational database design, transactional consistency, RE
 - Track balances across multiple accounts
 - Support accounts with different currencies
 - Organize transactions by category
-- Transfer money between accounts
-- Store exchange rates used for transfers
+- Transfer money between accounts, including cross-currency transfers
 - Create pending transfers and complete them later
 - View monthly income, expenses, and net totals
-- Filter dashboard summaries by month and currency
-- Start with an empty book and add accounts, categories, and currencies yourself
+- Filter dashboard summaries by month, currency, and account
+- **Total assets** valued in VND across all accounts plus gold holdings
+- Account types: **spending, savings, gold**
+- **Gold holdings** measured in `chi` / `luong`, priced from the live SJC rate
+  with a manual-entry fallback
+- **Savings goals** with contributions and a progress bar
+- Dashboard charts: last 6 months spending bar chart and per-category donut
+- JSON backup export/import of the whole book
 - Manage accounts, categories, and currencies through the app
-- Click an account to see its transactions in its own currency
+- Start with an empty book and add your own data
 - Store money as integers in the smallest unit of each currency
-- Archive accounts, categories, and currencies while preserving historical data
+- Archive accounts, categories, and currencies while preserving history
 - Maintain account balances with atomic database operations
 - Validate business rules at the service layer
 - Protect data integrity with SQLite constraints
 - Automated service and REST API tests
 
 ## Preview
-
-The browser frontend provides a simple dashboard for viewing account balances, monthly summaries, and transactions.
 
 ![Expense Tracker Dashboard](docs/images/dashboard.png)
 
@@ -37,20 +46,26 @@ The browser frontend provides a simple dashboard for viewing account balances, m
 
 - Node.js
 - Express
-- SQLite
-- `sqlite3`
+- SQLite (`sqlite3`)
 
 ### Frontend
 
-- HTML
-- CSS
-- Vanilla JavaScript
+- HTML, CSS
+- Vanilla JavaScript (ES modules)
 - Fetch API
+- Chart.js (served locally — see below)
 
 ### Testing
 
 - Jest
 - Supertest
+
+### Operations
+
+- GitHub Actions (CI + CD)
+- pm2 (process manager)
+- nginx (reverse proxy + basic auth)
+- Azure VM (Ubuntu 24.04)
 
 ## Architecture
 
@@ -58,174 +73,130 @@ The application uses a layered backend architecture:
 
 ```text
 Browser
-   ↓
+  ↓
 REST API
-   ↓
-Routes
-   ↓
-Services
-   ↓
-Database Layer
-   ↓
+  ↓
+Routes          (HTTP only: parse request, call service, send response)
+  ↓
+Services        (business logic + SQL)
+  ↓
+Database Layer  (Promise wrappers over sqlite3)
+  ↓
 SQLite
 ```
 
-Each layer has a separate responsibility:
+- **Routes** validate the HTTP contract and delegate to services. No SQL here.
+- **Services** hold business logic and talk to SQLite through the database layer.
+- **Database Layer** exposes `run()`, `get()`, `all()`, `exec()`, and
+  `withTransaction()` so services can use async/await.
 
-- **Frontend** displays application data and communicates with the REST API.
-- **Routes** handle HTTP requests and responses.
-- **Services** contain business rules and coordinate database operations.
-- **Database layer** provides Promise-based helpers for interacting with SQLite.
-- **SQLite** stores application data and enforces relational constraints.
-
-SQL is kept out of the route layer so HTTP concerns remain separate from business and persistence logic.
-
-See [`docs/architecture.md`](docs/architecture.md) for more details.
+See [`docs/architecture.md`](docs/architecture.md) for details.
 
 ## Database Design
 
-The application contains six main entities:
+Entities:
 
-- Currencies
-- Categories
-- Accounts
-- Transactions
-- Transfers
-- Application settings
-
-### Transactions
-
-Transactions represent either **income** or **expenses**.
-
-Each transaction belongs to one account and one category. Transaction amounts are always stored as positive values, while the transaction type determines how the account balance is affected.
-
-### Transfers
-
-Transfers are modeled separately from transactions because moving money between two accounts is neither income nor an expense.
-
-A transfer records:
-
-- Source account
-- Destination account
-- Sent amount
-- Received amount
+- Currency
+- Category
+- Account (`type`: spending / savings / gold)
+- Transaction
+- Transfer
+- Gold holding
+- Savings goal
+- Savings contribution
 - Exchange rate
-- Transfer status
-- Sent date
-- Received date
+- App settings
 
-The exchange rate is stored with the transfer so the historical rate used for that transfer is preserved.
-
-A transfer has one of two states:
-
-- A **pending** transfer records the sent amount and does not change any balance.
-- A **completed** transfer has moved money between the two accounts.
-
-Completing a pending transfer debits the source account, credits the destination account, and marks the transfer completed atomically. A transfer can only be completed once.
-
-### Multiple Currencies
-
-Each account has one currency.
-
-The application does not directly add values from different currencies because totals such as:
+Relationships:
 
 ```text
-100 USD + 1,000,000 VND
+Currency
+  ├── Account
+  │     ├── Transaction
+  │     ├── Transfer
+  │     └── Gold holding
+  └── Savings goal ── Savings contribution
+
+Category ── Transaction
+Currency ── Exchange rate (one rate per currency)
 ```
 
-are not financially meaningful without an exchange rate.
+See [`docs/database-design.md`](docs/database-design.md) for details.
 
-Dashboard calculations therefore operate within a selected currency.
+### Money, Gold, and Exchange Rates
 
-When a specific account is selected, the dashboard is scoped to that account too.
-
-See [`docs/database-design.md`](docs/database-design.md) for more details.
-
-### Money Representation
-
-Money is stored as integers in the smallest unit of each currency.
+**Money** is stored as integers in the smallest unit of each currency.
 
 - `currencies.decimal_places` records a currency's number of decimal places.
 - `$10.50` (USD, 2 decimals) is stored as `1050` cents.
 - `₫70,000` (VND, 0 decimals) is stored as `70000` dong.
 
-JavaScript numbers are IEEE-754 doubles, so using them for money risks rounding drift, and SQLite's `NUMERIC` is only a type affinity, not an exact decimal type. Integers avoid both problems.
+JavaScript numbers are IEEE-754 doubles, so using them for money risks rounding
+drift, and SQLite's `NUMERIC` is only a type affinity, not an exact decimal type.
+Integers avoid both problems. The API accepts and returns money only as integers;
+the browser converts between minor units and display format.
 
-The API accepts and returns money only as integers. The browser converts between minor units and display format.
+**Gold quantity** is stored as an integer in thousandths of the unit, so it stays
+exact: `1.5 luong` is stored as `1500`, `0.5 chi` as `500`. One `luong` equals
+10 `chi`. Value in VND = `quantity / 1000 * price per unit`.
 
-The exchange rate of a transfer is a ratio, not a money amount, so it is stored as an integer in micro units (`rate * 1_000_000`).
+**Exchange rates** are ratios, not money, so they are stored as integers in
+**micro units** (`rate * 1_000_000`). This convention is shared by
+`transfers.exchange_rate` and `exchange_rates.rate_to_vnd`.
+
+See [`docs/database-design.md`](docs/database-design.md) for details.
 
 ## Data Integrity
 
-The database uses:
+The database uses primary keys, foreign keys, `NOT NULL`, `UNIQUE`, and `CHECK`
+constraints, plus indexes on common query paths.
 
-- Primary keys
-- Foreign keys
-- `NOT NULL` constraints
-- `UNIQUE` constraints
-- `CHECK` constraints
-- Indexes
+The service layer performs business validation to produce meaningful
+application errors. Database constraints remain the final integrity boundary.
 
-The service layer also performs business validation to provide meaningful application errors.
-
-Database constraints remain the final integrity boundary.
+Two values are intentionally immutable once data exists, because existing
+balances are expressed in them: a currency's `decimal_places`, and an account's
+currency once it has history.
 
 ## Atomic Balance Updates
 
-Account balances are stored in the database rather than recalculated from the complete transaction history.
+Account balances are stored in the database rather than recalculated from the
+full transaction history, so any operation that changes both financial records
+and balances must be atomic.
 
-Because of this, operations that modify both financial records and balances must be atomic.
+Such operations run inside a single `withTransaction()` block using
+`BEGIN IMMEDIATE`, and either `COMMIT` or `ROLLBACK`. This covers creating,
+updating, and deleting transactions, completing transfers, and the JSON restore.
 
-For example, creating an expense requires:
+## API Reference
 
-```text
-BEGIN TRANSACTION
-
-INSERT expense
-UPDATE account balance
-
-COMMIT
-```
-
-If either operation fails:
-
-```text
-ROLLBACK
-```
-
-The same approach is used when updating or deleting transactions and when transferring money between accounts.
-
-This prevents situations where a transaction exists but its corresponding account balance was not updated, or vice versa.
-
-## REST API
+The API has no `/api` prefix; routes are mounted at the root.
 
 ### Transactions
 
 | Method | Endpoint | Description |
-| --- | --- | --- |
-| `GET` | `/transactions` | List transactions |
+|---|---|---|
+| `GET` | `/transactions` | List transactions (supports filters) |
 | `GET` | `/transactions/:id` | Get one transaction |
 | `POST` | `/transactions` | Create a transaction |
 | `PUT` | `/transactions/:id` | Update a transaction |
 | `DELETE` | `/transactions/:id` | Delete a transaction |
 
-Transaction listing also supports filtering.
-
 ### Accounts
 
 | Method | Endpoint | Description |
-| --- | --- | --- |
+|---|---|---|
 | `GET` | `/accounts` | List accounts and balances |
 | `GET` | `/accounts?active=1` | List active accounts only |
-| `POST` | `/accounts` | Create an account (`name`, `currencyId`, `initialBalance`) |
-| `PUT` | `/accounts/:id` | Update name, currency, or active status |
+| `POST` | `/accounts` | Create an account (`name`, `currencyId`, `initialBalance`, `type`) |
+| `PUT` | `/accounts/:id` | Update name, currency, type, or active status |
 
-The currency of an account that already owns transactions or transfers cannot be changed.
+An account's currency cannot change once it has transactions or transfers.
 
 ### Categories
 
 | Method | Endpoint | Description |
-| --- | --- | --- |
+|---|---|---|
 | `GET` | `/categories` | List active categories |
 | `GET` | `/categories?all=1` | List categories including archived |
 | `POST` | `/categories` | Create a category (`name`) |
@@ -234,19 +205,19 @@ The currency of an account that already owns transactions or transfers cannot be
 ### Currencies
 
 | Method | Endpoint | Description |
-| --- | --- | --- |
+|---|---|---|
 | `GET` | `/currencies` | List currencies |
 | `GET` | `/currencies?active=1` | List active currencies only |
 | `GET` | `/currencies?all=1` | List currencies including archived |
 | `POST` | `/currencies` | Create a currency (`code`, `name`, `symbol`, `decimalPlaces`) |
 | `PUT` | `/currencies/:id` | Update name, symbol, or active status |
 
-A currency's code and `decimalPlaces` are fixed after creation because balances use them as their unit.
+A currency's code and `decimalPlaces` are fixed after creation.
 
 ### Transfers
 
 | Method | Endpoint | Description |
-| --- | --- | --- |
+|---|---|---|
 | `GET` | `/transfers` | List transfers |
 | `GET` | `/transfers/:id` | Get one transfer |
 | `POST` | `/transfers` | Create a transfer |
@@ -255,81 +226,109 @@ A currency's code and `decimalPlaces` are fixed after creation because balances 
 ### Dashboard
 
 | Method | Endpoint | Description |
-| --- | --- | --- |
-| `GET` | `/dashboard` | Get income, expense, net, and category totals |
+|---|---|---|
+| `GET` | `/dashboard` | Income, expense, net, per-category, and monthly trend |
 
-Example:
+Query parameters: `start`, `end`, `currency`, optional `accountId`, and
+`months` (number of months for the trend, default 6).
 
-```text
-GET /dashboard?start=2026-10-01&end=2026-11-01&currency=USD
-```
+### Assets
 
-`accountId` is an optional filter that scopes the totals to one account:
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/assets` | Total net worth in VND (cash + gold) with a breakdown |
 
-```text
-GET /dashboard?start=2026-10-01&end=2026-11-01&currency=USD&accountId=3
-```
+### Gold holdings
 
-Example response:
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/gold-holdings` | List gold holdings |
+| `POST` | `/gold-holdings` | Create (`accountId`, `quantity`, `unit`, `note`) |
+| `PUT` | `/gold-holdings/:id` | Update a holding |
+| `DELETE` | `/gold-holdings/:id` | Delete a holding |
 
-```json
-{
-  "currency": "USD",
-  "decimalPlaces": 2,
-  "totalIncome": 120000,
-  "totalExpense": 18524,
-  "net": 101476,
-  "byCategory": [
-    {
-      "category": "Food",
-      "total": 7025
-    }
-  ]
-}
-```
+`quantity` is a decimal (e.g. `1.5`); it is stored internally in thousandths.
 
-All amounts in the response are integers in the smallest unit of the selected currency (cents for USD).
+### Gold prices
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/gold-prices/current` | Current SJC price (API → manual → cache) |
+| `POST` | `/gold-prices/refresh` | Force a refresh from the price API |
+
+### Exchange rates
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/exchange-rates` | List rates |
+| `POST` | `/exchange-rates/refresh` | Refresh rates from the rate API |
+| `PUT` | `/exchange-rates/:currencyId` | Set a rate manually |
+
+### Savings goals
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/savings-goals` | List goals |
+| `POST` | `/savings-goals` | Create a goal |
+| `GET` | `/savings-goals/:id` | Get one goal |
+| `PUT` | `/savings-goals/:id` | Update a goal |
+| `DELETE` | `/savings-goals/:id` | Delete a goal |
+| `GET` | `/savings-goals/:id/contributions` | List contributions |
+| `POST` | `/savings-goals/:id/contributions` | Add a contribution |
+| `DELETE` | `/savings-goals/contributions/:id` | Delete a contribution |
+
+### Settings
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/settings` | Read settings (base currency, manual gold price) |
+| `PUT` | `/settings/gold-price` | Set the manual gold price |
+| `DELETE` | `/settings/gold-price` | Clear the manual gold price |
+
+### Backup
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/backup` | Export the whole book as JSON |
+| `POST` | `/backup` | Restore from JSON (atomic, replaces all data) |
+
+### Static
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/vendor/chart.js` | Chart.js served from `node_modules` (no CDN) |
 
 ## Frontend
 
-The frontend is served directly by Express and communicates with the REST API using `fetch()`.
+The frontend is served by Express and talks to the API with `fetch()`. It has
+six tabs:
 
-It is organized into four tabs to avoid long scrolling:
+- **Tổng quan (Overview)** – total assets hero, last-6-months bar chart, and
+  per-category donut, with month/currency filters
+- **Giao dịch (Transactions)** – full list with type/category/account/date
+  filters and a name datalist
+- **Chuyển khoản (Transfers)** – transfer list plus creating and completing
+- **Tài sản (Assets)** – accounts grouped by type, gold holdings, live gold
+  price with manual fallback, and an editable exchange-rate table
+- **Mục tiêu (Goals)** – savings goals with a progress bar and contributions
+- **Quản lý (Management)** – accounts, categories, currencies, and JSON
+  export/import
 
-- **Tổng quan (Overview)** – monthly income, expense, and net cards with month/currency filters, clickable account cards, and the selected account's transactions
-- **Giao dịch (Transactions)** – full transaction list with account and type filters
-- **Chuyển khoản (Transfers)** – transfer list plus creating and completing transfers
-- **Quản lý (Management)** – adding, editing, and archiving accounts, categories, and currencies
+Money is exchanged with the API in minor units and formatted for display using
+each currency's `decimalPlaces`. Failed loads surface a toast, and charts fall
+back to a visible message instead of failing silently.
 
-Clicking an account card selects it (highlighted), switches the summary currency to the account's currency, scopes the totals to that account, and lists its transactions below.
-
-It supports:
-
-- Viewing account balances
-- Viewing transactions
-- Viewing monthly financial summaries
-- Filtering summaries by month and currency
-- Adding, editing, and deleting transactions
-- Viewing transfers
-- Creating transfers
-- Completing pending transfers
-- Managing accounts, categories, and currencies
-
-Because the API works in minor units, the frontend converts amounts to and from display format using each currency's `decimalPlaces`.
-
-When the database is empty, the frontend shows helpful empty states and guides the user to create their first account.
-
-After data changes, the relevant frontend data is refreshed so account balances, transaction history, transfers, and dashboard totals remain synchronized.
+**Chart.js is served locally.** The app does not load it from a CDN, because a
+blocked CDN would silently break the charts. `GET /vendor/chart.js` streams the
+file from `node_modules`, and `public/js/charts.js` uses the global `Chart`.
 
 ## Project Structure
 
 ```text
 expense-tracker/
-├── .github/
-│   └── workflows/
-│       ├── ci.yml
-│       └── deploy.yml
-│
+├── .github/workflows/
+│   ├── ci.yml
+│   └── deploy.yml
 ├── database/
 │   ├── migrations/
 │   │   ├── 001_money_to_integer.sql
@@ -338,65 +337,28 @@ expense-tracker/
 │   ├── seed-reference.sql
 │   ├── seed.sql
 │   └── queries.sql
-│
 ├── deploy/
 │   ├── backup-db.sh
 │   └── nginx.conf
-│
 ├── docs/
-│   ├── PLAN.md
-│   ├── LESSONS.md
-│   ├── QA-CHECKLIST.md
+│   ├── DEPLOY-VM.md
+│   ├── architecture.md
+│   ├── database-design.md
 │   └── images/
-│
 ├── public/
-│   ├── js/
-│   │   └── charts.js
+│   ├── js/charts.js
 │   ├── index.html
 │   ├── styles.css
 │   └── app.js
-│
 ├── src/
-│   ├── errors/
-│   │   └── AppError.js
-│   ├── routes/
-│   │   ├── accounts.js
-│   │   ├── assets.js
-│   │   ├── backup.js
-│   │   ├── categories.js
-│   │   ├── currencies.js
-│   │   ├── dashboard.js
-│   │   ├── exchangeRates.js
-│   │   ├── goldHoldings.js
-│   │   ├── goldPrices.js
-│   │   ├── savingsGoals.js
-│   │   ├── settings.js
-│   │   ├── transactions.js
-│   │   └── transfers.js
-│   ├── services/
-│   │   ├── accountService.js
-│   │   ├── assetService.js
-│   │   ├── backupService.js
-│   │   ├── categoryService.js
-│   │   ├── currencyService.js
-│   │   ├── dashboardService.js
-│   │   ├── exchangeRateService.js
-│   │   ├── goldHoldingService.js
-│   │   ├── goldPriceService.js
-│   │   ├── savingsGoalService.js
-│   │   ├── settingsService.js
-│   │   ├── transactionService.js
-│   │   └── transferService.js
+│   ├── errors/AppError.js
+│   ├── routes/         (13 route modules)
+│   ├── services/       (14 service modules)
 │   ├── app.js
 │   ├── database.js
 │   └── server.js
-│
-├── test/
-│   ├── setup.js
-│   └── *.test.js
-│
+├── test/               (13 suites, 144 tests)
 ├── ecosystem.config.cjs
-├── .gitignore
 ├── package.json
 ├── package-lock.json
 └── README.md
@@ -404,68 +366,37 @@ expense-tracker/
 
 ## Getting Started
 
-### Prerequisites
+### Requirements
 
-Install:
-
-- Node.js
+- Node.js 24 (or a current LTS)
 - npm
-- SQLite
+- SQLite CLI (optional, for inspecting the database)
 
-Check that they are available:
-
-```bash
-node --version
-npm --version
-sqlite3 --version
-```
-
-### Clone the Repository
+### Install and run
 
 ```bash
 git clone https://github.com/heoconngoc/expense-tracker.git
 cd expense-tracker
-```
-
-### Install Dependencies
-
-```bash
 npm install
-```
-
-### Start the Application
-
-```bash
 npm start
 ```
 
-On the first run the application creates the database automatically and seeds only reference data (USD/VND currencies and a few default categories). It does **not** seed accounts, transactions, or transfers — the book starts empty so you can add your own data.
+The app runs at <http://localhost:3000> by default; set `PORT` to change it.
 
-The application runs by default at:
+On the first run the server creates the database automatically, applies
+`database/schema.sql`, and seeds reference data only (USD/VND currencies and a
+few default categories). It does **not** seed accounts or transactions — the
+book starts empty.
 
-```text
-http://localhost:3000
-```
+On later runs the server applies any pending migrations in
+`database/migrations/`, after copying a safety backup of the database to
+`database/backups/`. Database files are ignored by Git, so each environment has
+its own.
 
-Open that address in a browser to use the frontend.
+### Sample data (optional)
 
-The port can also be configured through the `PORT` environment variable.
-
-The database files themselves are ignored by Git, so each development environment can create its own local database.
-
-### Migrate an Existing Database
-
-If you already have a database created with an older schema, apply the migrations instead of recreating it:
-
-```bash
-sqlite3 database/expense.db < database/migrations/001_money_to_integer.sql
-```
-
-`001_money_to_integer.sql` converts money from decimal base units to integer minor units. SQLite cannot change a column type with `ALTER TABLE`, so the migration recreates the affected tables and copies the data across inside a single transaction.
-
-### Sample Data (optional)
-
-`database/seed.sql` contains demo accounts, transactions, and transfers. It is used by the automated tests and can be loaded manually for exploration:
+`database/seed.sql` adds demo accounts, transactions, and transfers. It is used
+by the automated tests and can be loaded manually:
 
 ```bash
 sqlite3 database/dev.db < database/schema.sql
@@ -475,320 +406,99 @@ sqlite3 database/dev.db < database/seed.sql
 
 ## Testing
 
-Run the automated test suite with:
-
 ```bash
-npm test
+npm test              # fast, no coverage (used by CI on every push/PR)
+npm run test:coverage # same tests with coverage + thresholds
 ```
 
-Tests use a separate SQLite database:
+Tests run against a separate database (`database/test.db`) that is reset to a
+known state before each run, and network calls are injected so tests never need
+internet. There are **144 tests across 13 suites**; coverage of
+`src/services/` is above the configured thresholds (80% statements / 70%
+branches / 80% functions / 80% lines).
 
-```text
-database/test.db
-```
+## Deployment
 
-The test database is reset to a known schema and seed state so tests remain isolated from the development database.
-
-The test suite covers important business behavior including:
-
-- Creating income and expense transactions
-- Account balance updates
-- Transaction updates
-- Transaction deletion
-- Transfers
-- Rollback behavior
-- Invalid transaction data
-- Invalid or inactive references
-- REST API success and error responses
-
-## Deployment (Azure VM + continuous deployment)
-
-The app runs on a small Ubuntu VM with this layout:
+The app runs on a small Ubuntu VM behind nginx, managed by pm2, deployed by
+GitHub Actions.
 
 ```text
 Browser
   │  HTTP(S) + basic auth
   ▼
-nginx (reverse proxy, port 80/443)
+nginx (80/443)
   ▼
-pm2 ──► node src/server.js (port 3000)
+pm2 ──► node src/server.js (3000)
   ▼
-/var/lib/expense-tracker/expense.db   (data, outside the deploy folder)
-/var/lib/expense-tracker/backups/     (nightly .db.gz, kept 7 days)
+/var/lib/expense-tracker/expense.db      (data, outside the deploy folder)
+/var/lib/expense-tracker/backups/        (nightly .db.gz, kept 7 days)
 ```
 
-Code lives in `/var/www/expense-tracker` and is **wiped on every deploy**, so the
-database and backups are kept in `/var/lib` and are never touched by a redeploy.
+Code lives in `/var/www/expense-tracker` and is **replaced on every deploy**, so
+the database and backups are kept in `/var/lib` and are never touched by a
+redeploy.
 
-Files that support this:
+Supporting files:
 
 - `ecosystem.config.cjs` — pm2 process definition + production env
 - `deploy/backup-db.sh` — nightly SQLite `.backup` + gzip + 7-day retention
 - `deploy/nginx.conf` — reverse proxy + basic auth
 - `.github/workflows/deploy.yml` — on green CI on `main`: rsync, `npm ci`, pm2 reload
 
-### Part 1 — Create the VM (Azure portal)
+### CI/CD flow
 
-1. Sign in to <https://portal.azure.com>. If you are a student, first activate
-   **Azure for Students** at <https://azure.microsoft.com/free/students>
-   (verify with your school email — no credit card required).
-2. In the portal search bar type **Virtual machines** → **Create** →
-   **Azure virtual machine**.
-3. Fill in the **Basics** tab:
-   - **Subscription**: Azure for Students (or your subscription).
-   - **Resource group**: create new, e.g. `expense-tracker-rg`.
-   - **Virtual machine name**: `expense-tracker-vm`.
-   - **Region**: **Southeast Asia** (closest to Vietnam).
-   - **Availability options**: No infrastructure redundancy required.
-   - **Security type**: Standard.
-   - **Image**: **Ubuntu Server 24.04 LTS - x64 Gen2**.
-   - **Size**: click **See all sizes**, search `B1s` (1 vCPU, 1 GiB). Under
-     Azure for Students it is free for 750 hours/month. If `B1s` is unavailable
-     in the region, pick `B1ls`/`B2ats_v2` but check the free-tier note.
-   - **Authentication type**: **SSH public key**.
-   - **Username**: e.g. `azureuser`.
-   - **SSH public key source**: **Generate new key pair**; **Key pair name**:
-     `expense-tracker-key`.
-   - **Public inbound ports**: **Allow selected ports** → check **SSH (22)** and
-     **HTTP (80)**. Add **HTTPS (443)** too if you plan to use a domain.
-4. **Disks** tab: leave defaults (Standard SSD is fine).
-5. **Networking** tab: keep the defaults (it creates a public IP + NSG). Make
-   sure inbound 22, 80 (and 443) are allowed.
-6. **Review + create** → **Create**. When prompted, **Download private key and
-   create resource**. You get `expense-tracker-key.pem` — keep it safe, this is
-   the only copy.
-7. After deployment, open the VM and copy the **Public IP address** (Overview
-   page). You need it for SSH and GitHub secrets.
+- **CI** (`.github/workflows/ci.yml`) runs `npm ci` + `npm test` on pushes and
+  pull requests to `main` and `develop`.
+- **Deploy** (`.github/workflows/deploy.yml`) runs after CI succeeds on a `main`
+  push (`workflow_run`), rsyncs the code to the VM, runs `npm ci --omit=dev`,
+  and reloads pm2.
 
-Move the key to a safe place and lock it down (on your Mac):
+The deploy needs three repository secrets (Settings → Secrets and variables →
+Actions): `AZURE_SSH_HOST`, `AZURE_SSH_USER`, `AZURE_SSH_KEY`.
 
-```bash
-mv ~/Downloads/expense-tracker-key.pem ~/.ssh/expense-tracker-key.pem
-chmod 400 ~/.ssh/expense-tracker-key.pem
-```
+### Full runbook
 
-Connect for the first time (replace the IP):
-
-```bash
-ssh -i ~/.ssh/expense-tracker-key.pem azureuser@<PUBLIC_IP>
-```
-
-### Part 2 — Prepare the VM
-
-Run these on the VM (after `ssh`):
-
-```bash
-# 1. System packages
-sudo apt update
-sudo apt install -y nginx sqlite3 rsync build-essential python3 apache2-utils
-
-# 2. Node.js 24 (NodeSource)
-curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
-sudo apt install -y nodejs
-
-# 3. pm2 (process manager) + run it on boot
-sudo npm install -g pm2
-pm2 startup systemd -u "$USER" --hp "$HOME"   # run the printed sudo command
-
-# 4. Data + deploy folders
-sudo mkdir -p /var/lib/expense-tracker/backups
-sudo chown -R "$USER":"$USER" /var/lib/expense-tracker
-sudo mkdir -p /var/www/expense-tracker
-sudo chown -R "$USER":"$USER" /var/www/expense-tracker
-```
-
-Verify: `node -v` (v24.x) and `pm2 -v`.
-
-### Part 3 — GitHub repository secrets
-
-On GitHub open your repo → **Settings** → **Secrets and variables** →
-**Actions** → **New repository secret**. Add:
-
-| Secret | Value |
-|---|---|
-| `AZURE_SSH_HOST` | the VM public IP (e.g. `20.1.2.3`) |
-| `AZURE_SSH_USER` | `azureuser` |
-| `AZURE_SSH_KEY` | the **entire contents** of `expense-tracker-key.pem`, including the `-----BEGIN/END-----` lines |
-
-To print the key for copying:
-
-```bash
-cat ~/.ssh/expense-tracker-key.pem
-```
-
-### Part 4 — First deploy
-
-The deploy pipeline runs automatically when CI passes on `main`. To bring the
-app up for the first time, merge/push `develop` into `main` (or push any commit
-to `main`). The **Deploy** workflow will rsync the code, run `npm ci --omit=dev`
-and start pm2.
-
-If you prefer to do the first deploy by hand (optional sanity check):
-
-```bash
-# on your Mac
-rsync -avz --delete --exclude node_modules --exclude .git \
-  --exclude '.env' --exclude 'database/*.db*' --exclude 'database/backups' \
-  -e "ssh -i ~/.ssh/expense-tracker-key.pem" \
-  ./ azureuser@<PUBLIC_IP>:/var/www/expense-tracker/
-
-# on the VM
-cd /var/www/expense-tracker
-npm ci --omit=dev
-pm2 startOrReload ecosystem.config.cjs --env production
-pm2 save
-pm2 logs expense-tracker --lines 30
-```
-
-The app now listens on `http://127.0.0.1:3000`. You can check directly with
-`curl http://127.0.0.1:3000/dashboard?...` before exposing it via nginx.
-
-### Part 5 — nginx reverse proxy + basic auth
-
-```bash
-# 1. Expose the site config
-sudo cp /var/www/expense-tracker/deploy/nginx.conf /etc/nginx/sites-available/expense-tracker
-sudo ln -sf /etc/nginx/sites-available/expense-tracker /etc/nginx/sites-enabled/expense-tracker
-sudo rm -f /etc/nginx/sites-enabled/default
-
-# 2. Basic auth (choose a username, set a password when prompted)
-sudo htpasswd -c /etc/nginx/.htpasswd yourname
-
-# 3. Test and reload
-sudo nginx -t
-sudo systemctl reload nginx
-```
-
-Open `http://<PUBLIC_IP>` in a browser — the browser should ask for the
-username/password, then show the app.
-
-HTTPS (optional — needs a domain whose A record points at the VM's public IP):
-
-```bash
-sudo apt install -y certbot python3-certbot-nginx
-sudo certbot --nginx -d your-domain.com
-```
-
-### Part 6 — Nightly database backup
-
-```bash
-# create the cron job (runs every day at 03:00 as the current user)
-( crontab -l 2>/dev/null; \
-  echo '0 3 * * * DB_PATH=/var/lib/expense-tracker/expense.db BACKUP_DIR=/var/lib/expense-tracker/backups /var/www/expense-tracker/deploy/backup-db.sh >> /var/log/expense-backup.log 2>&1' \
-) | crontab -
-```
-
-Run it once to confirm it works:
-
-```bash
-DB_PATH=/var/lib/expense-tracker/expense.db \
-BACKUP_DIR=/var/lib/expense-tracker/backups \
-/var/www/expense-tracker/deploy/backup-db.sh
-ls -lh /var/lib/expense-tracker/backups
-```
-
-### Part 7 — Restore a backup
-
-```bash
-cd /var/lib/expense-tracker/backups
-gunzip -k expense-YYYY-MM-DD-HHMMSS.db.gz          # keep the .gz too
-pm2 stop expense-tracker
-cp expense-YYYY-MM-DD-HHMMSS.db /var/lib/expense-tracker/expense.db
-rm -f /var/lib/expense-tracker/expense.db-wal /var/lib/expense-tracker/expense.db-shm
-pm2 start expense-tracker
-```
-
-Alternatively, use the in-app **Xuất/Nhập JSON** feature in the Quản lý tab to
-export from anywhere and import back.
-
-### Ongoing deploys
-
-1. Push to `develop`, open a PR, merge into `main`.
-2. CI runs on `main`; when green, the **Deploy** workflow syncs the VM and runs
-   `pm2 startOrReload`.
-3. Reload the browser. The database is untouched (it lives in `/var/lib`).
-
-### Troubleshooting
-
-```bash
-pm2 status                          # is the process online?
-pm2 logs expense-tracker            # app logs
-sudo tail -f /var/log/nginx/error.log
-sudo systemctl status nginx
-curl -I http://127.0.0.1:3000       # bypass nginx
-```
+See [`docs/DEPLOY-VM.md`](docs/DEPLOY-VM.md) for the step-by-step guide:
+creating the Azure VM, preparing it, adding secrets, the first deploy, nginx +
+basic auth, nightly backups, verification, and troubleshooting.
 
 ## Database Performance
 
-Indexes are included for common transaction access patterns:
+Indexes cover common transaction access patterns:
 
 ```sql
-CREATE INDEX idx_transactions_account_date
-ON transactions(account_id, date);
-
-CREATE INDEX idx_transactions_date
-ON transactions(date);
-
-CREATE INDEX idx_transactions_category_id
-ON transactions(category_id);
+CREATE INDEX idx_transactions_account_date ON transactions(account_id, date);
+CREATE INDEX idx_transactions_date         ON transactions(date);
+CREATE INDEX idx_transactions_category_id  ON transactions(category_id);
 ```
 
-The composite `(account_id, date)` index supports queries that filter transactions by account and date range.
-
-SQLite `EXPLAIN QUERY PLAN` was used to verify index usage for common query patterns.
+The composite `(account_id, date)` index supports filtering transactions by
+account and date range; `EXPLAIN QUERY PLAN` was used to confirm index usage.
 
 ## Error Handling
 
-Expected application errors use a custom `AppError` containing an HTTP status code.
+Expected application errors use a custom `AppError` carrying an HTTP status
+code (for example: invalid amounts, missing references, inactive references,
+insufficient balance, duplicate names). The error middleware converts these to
+JSON responses. Unexpected errors become a generic HTTP 500 without leaking
+internal details.
 
-Examples include:
+## Design Principles
 
-- Invalid transaction amounts
-- Missing transactions
-- Invalid accounts
-- Inactive accounts
-- Invalid categories
-- Invalid transfers
-- Insufficient balance
-- Unknown currencies
-
-Unexpected errors are handled by the global Express error middleware and returned as:
-
-```json
-{
-  "error": "Internal server error"
-}
-```
-
-Internal implementation details are not exposed to the client.
-
-Unknown API routes return a JSON `404` response.
-
-## Design Goals
-
-This project was designed around several principles:
-
-1. Keep HTTP handling separate from business logic.
-2. Keep SQL out of route handlers.
-3. Use relational constraints to protect database integrity.
-4. Use service-layer validation for business rules.
-5. Make multi-record financial operations atomic.
-6. Keep transfers separate from income and expenses.
-7. Avoid aggregating unrelated currencies.
-8. Test important business behavior automatically.
-9. Optimize common database access patterns with targeted indexes.
-10. Keep the frontend lightweight and focused on consuming the REST API.
+1. Strict layering: routes only do HTTP; services own business logic and SQL.
+2. Money is integers in minor units; the API never sends decimal money.
+3. Multi-table writes are atomic via `withTransaction()`.
+4. Archive instead of hard-delete anything with history.
+5. Validate at the service layer; keep database constraints as the final boundary.
+6. Test business behavior automatically and keep tests independent of the network.
+7. Keep the frontend lightweight and focused on the REST API.
 
 ## Future Improvements
 
-Possible future extensions include:
-
-- User authentication
-- Per-user accounts and transactions
-- Historical exchange-rate integration
-- Pagination
-- More advanced transaction filtering
+- User authentication and per-user data
 - Budgets and recurring transactions
-- Logging and monitoring
+- Pagination and richer transaction filtering
+- Historical exchange-rate integration
+- PWA support and dark mode
 
-These features are intentionally outside the scope of the current version.
+These are intentionally outside the current scope.
