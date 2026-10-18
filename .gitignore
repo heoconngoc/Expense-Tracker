@@ -10,3 +10,5 @@ database/backups/
 *.sqlite3
 .DS_Store
 /LESSONS.md
+docs/LESSONS.md
+docs/PLAN.md
